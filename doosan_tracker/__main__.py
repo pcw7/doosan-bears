@@ -3,13 +3,14 @@
     python -m doosan_tracker sync --from 2026-03-01 --to 2026-10-06 --force   # 기간 지정 재수집
     python -m doosan_tracker report               # 리포트만 다시 생성
     python -m doosan_tracker status               # DB 현황 확인
+    python -m doosan_tracker players --all        # 모든 시즌 선수 정보(등번호·프로필) 수집 (처음 한 번)
 """
 import argparse
 import logging
 import sys
 from datetime import date
 
-from . import db, export, report
+from . import db, export, players, report
 from .config import CSV_DIR, DB_PATH, LOG_PATH, SITE_DIR
 from .sync import restore, sync
 
@@ -35,6 +36,16 @@ def publish(conn) -> None:
     logging.info("리포트 %d개 시즌 (%d~%d) → %s", len(seasons), seasons[-1], seasons[0], SITE_DIR)
 
 
+def update_players(conn, all_seasons: bool) -> None:
+    """선수 정보 갱신. 실패해도 경기 기록 수집·배포는 계속되도록 경고만 남긴다."""
+    seasons = report.seasons(conn)
+    for s in seasons if all_seasons else seasons[:1]:
+        try:
+            players.update(conn, s, current=s == seasons[0])
+        except Exception:
+            logging.exception("%d 선수 정보 갱신 실패", s)
+
+
 def status(conn) -> None:
     for row in conn.execute("""
             SELECT season, stage, COUNT(*) n, SUM(status='FINAL') final,
@@ -58,6 +69,8 @@ def main(argv=None) -> int:
     s.add_argument("--no-report", action="store_true", help="CSV/리포트 생성 생략")
     sub.add_parser("report", help="CSV/HTML 리포트만 생성 (모든 시즌)")
     sub.add_parser("status", help="DB 현황")
+    pl = sub.add_parser("players", help="선수 정보(등번호·프로필) 수집")
+    pl.add_argument("--all", action="store_true", help="지난 시즌까지 모든 시즌 (처음 한 번)")
     args = p.parse_args(argv)
 
     if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
@@ -67,6 +80,7 @@ def main(argv=None) -> int:
     try:
         if args.cmd == "sync":
             stats = sync(conn, args.start, args.end, args.force)
+            update_players(conn, all_seasons=False)
             if not args.no_report:
                 publish(conn)
             return 1 if stats["failed"] else 0
@@ -75,6 +89,8 @@ def main(argv=None) -> int:
             publish(conn)
         elif args.cmd == "status":
             status(conn)
+        elif args.cmd == "players":
+            update_players(conn, all_seasons=args.all)
         return 0
     except Exception:
         logging.exception("실행 중 오류")

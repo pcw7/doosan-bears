@@ -53,6 +53,30 @@ def team_record(conn, season: int, stage: str) -> dict:
     return rec
 
 
+POSITION_CODES = {"포": "포수", "一": "1루수", "二": "2루수", "三": "3루수", "유": "유격수",
+                  "좌": "좌익수", "중": "중견수", "우": "우익수", "지": "지명타자"}
+POSITION_GROUPS = {"투수": "투수", "포수": "포수", "1루수": "내야수", "2루수": "내야수", "3루수": "내야수", "유격수": "내야수",
+                   "좌익수": "외야수", "중견수": "외야수", "우익수": "외야수", "지명타자": "지명타자"}
+
+
+def positions(conn, season: int, team: str = TEAM_CODE) -> dict[str, str]:
+    """선수별 그 시즌 주 포지션. 투구 기록이 있으면 투수, 아니면 박스스코어 위치('유', '타二' 등) 중 가장 많이 맡은 수비 위치.
+    대타·대주자로만 나온 선수는 빠진다 (화면에서 프로필 포지션으로 대신함)."""
+    pitchers = {r[0] for r in conn.execute("""
+        SELECT DISTINCT p.player_id FROM pitching p JOIN games g USING (game_id)
+        WHERE p.team_code=? AND g.season=? AND g.status='FINAL'""", (team, season))}
+    counts = defaultdict(lambda: defaultdict(int))
+    for pid, pos in conn.execute("""
+            SELECT b.player_id, b.position FROM batting b JOIN games g USING (game_id)
+            WHERE b.team_code=? AND g.season=? AND g.status='FINAL'""", (team, season)):
+        for ch in pos or "":
+            if ch in POSITION_CODES:
+                counts[pid][POSITION_CODES[ch]] += 1
+    out = {pid: max(c, key=c.get) for pid, c in counts.items()}
+    out.update({pid: "투수" for pid in pitchers})
+    return out
+
+
 def missing_boxes(conn, season: int, stage: str, team: str = TEAM_CODE) -> dict:
     """종료 경기 중 네이버에 타자/투수 기록이 없는 경기 수 (2011년 투수 기록, 2008년 포스트시즌 등)."""
     r = conn.execute(f"""

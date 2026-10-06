@@ -33,6 +33,12 @@ def _get(path: str, params: dict | None = None, retries: int = 3) -> dict:
             if not body.get("success", True):
                 raise ApiError(f"API 실패 응답: {url} → {body.get('code')}")
             return body["result"]
+        except urllib.error.HTTPError as e:
+            if 400 <= e.code < 500 and e.code != 429:  # 없는 선수 등 다시 해도 같은 요청 오류는 바로 포기
+                raise ApiError(f"요청 실패: {url}: {e}") from None
+            last_err = e
+            log.warning("요청 실패 (%d/%d) %s: %s", attempt, retries, url, e)
+            time.sleep(2 * attempt)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as e:
             last_err = e
             log.warning("요청 실패 (%d/%d) %s: %s", attempt, retries, url, e)
@@ -64,3 +70,14 @@ def fetch_schedule(start: date, end: date) -> list[dict]:
 def fetch_record(game_id: str) -> dict:
     """경기 기록(박스스코어). 반환값은 recordData 객체."""
     return _get(f"/schedule/games/{game_id}/record")["recordData"]
+
+
+def fetch_lineups(game_id: str) -> dict:
+    """문자중계에 실린 양 팀 출전 선수 (그 경기 당시 등번호 포함). {"home": {"batter": [...], "pitcher": [...]}, "away": ...}"""
+    relay = _get(f"/schedule/games/{game_id}/relay").get("textRelayData") or {}
+    return {"home": relay.get("homeLineup") or {}, "away": relay.get("awayLineup") or {}}
+
+
+def fetch_player(season: int, player_id: str) -> dict:
+    """선수 프로필(현재 기준)과 그 시즌 기록. {"player": {...}, "hitterStats": {...}, "pitcherStats": {...}}"""
+    return _get(f"/statistics/categories/kbo/seasons/{season}/players/{player_id}")

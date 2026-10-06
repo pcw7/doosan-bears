@@ -4,7 +4,7 @@ import shutil
 from datetime import date, datetime
 from pathlib import Path
 
-from . import db, stats
+from . import db, players, stats
 from .config import ROUND_NAMES, TEAM_CODE, TEAM_NAME
 
 TEMPLATE = Path(__file__).parent / "templates" / "report.html"
@@ -80,7 +80,40 @@ def build_data(conn, season: int, all_seasons: list[int]) -> dict:
         "standings": db.get_meta(conn, f"standings:{season}"),
         "finished": remaining == 0,
         "stages": stages, "games": _games(conn, season),
+        "players": _players(conn, season, current=season == all_seasons[0]),
     }
+
+
+def _players(conn, season: int, current: bool) -> dict:
+    """선수 탭·선수 창에 쓸 정보: 그 시즌 등번호와 포지션, 프로필(사진·생년월일 등), 그 시즌 WAR."""
+    info = players.load(season)
+    pos = stats.positions(conn, season)
+    ids = {r[0] for r in conn.execute("""
+        SELECT x.player_id FROM (SELECT game_id, player_id, team_code FROM batting
+                                 UNION ALL SELECT game_id, player_id, team_code FROM pitching) x
+        JOIN games g USING (game_id) WHERE x.team_code=? AND g.season=?""", (TEAM_CODE, season))}
+    out = {}
+    for pid in ids:
+        prof = info["profiles"].get(pid) or {}
+        position = pos.get(pid) or prof.get("position")
+        stat = prof.get("pitcher") if position == "투수" else prof.get("hitter")
+        out[pid] = {
+            "no": (info["numbers"].get(pid) or {}).get("no"),
+            "pos": position,
+            "group": stats.POSITION_GROUPS.get(position) or (position if position in ("내야수", "외야수") else "야수"),
+            "image": prof.get("image"), "birth": prof.get("birth"),
+            "height": prof.get("height"), "weight": prof.get("weight"), "type": prof.get("type"),
+            "career": prof.get("career"), "draft": prof.get("draft"),
+            # 연봉은 현재 기준이라 진행 중 시즌의 현 두산 선수만
+            "salary": prof.get("salary") if current and prof.get("team") == TEAM_CODE else None,
+            "war": stat.get("war") if stat and stat.get("g") else None,
+        }
+    # 네이버에 세부 지표가 없는 옛 시즌(2016년 이전)은 WAR가 0.0으로 채워져 있어, 0이 아닌 값이 80% 미만이면 숨긴다
+    wars = [p["war"] for p in out.values() if p["war"] is not None]
+    if wars and sum(1 for w in wars if w) < 0.8 * len(wars):
+        for p in out.values():
+            p["war"] = None
+    return out
 
 
 def seasons(conn) -> list[int]:

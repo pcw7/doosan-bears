@@ -7,6 +7,7 @@ TEAM_NAME = "두산 베어스"
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 ARCHIVE_DIR = DATA_DIR / "games"  # 경기별 원본 JSON, 암호화해서 git에 저장
+PLAYERS_DIR = DATA_DIR / "players"  # 시즌별 선수 정보(등번호·프로필), 암호화해서 git에 저장
 KEY_PATH = ROOT / "archive.key"   # 원본 암호 키 (git에 올리지 않음, 환경변수 DOOSAN_ARCHIVE_KEY가 우선)
 DB_PATH = DATA_DIR / "doosan.db"  # ARCHIVE_DIR에서 언제든 다시 만들 수 있는 캐시
 SITE_DIR = ROOT / "reports"       # GitHub Pages로 배포되는 폴더

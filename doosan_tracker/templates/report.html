@@ -88,6 +88,23 @@ tr.box > td { padding: 0; background: var(--hover); }
 .notice { border: 1px solid var(--line); background: var(--hover); border-radius: 8px; padding: 10px 12px; margin-bottom: 4px; }
 .notice .nt { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 .notice .nt .tag { margin: 0 4px 0 0; }
+.grp { font-size: 14px; margin: 18px 0 8px; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.pcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; text-align: center; cursor: pointer; }
+.pcard:hover { border-color: var(--accent); background: var(--hover); }
+.pcard .nm { font-weight: 700; }
+.pcard .ps { font-size: 12px; color: var(--muted); }
+.pcard .st { font-size: 12px; margin-top: 6px; }
+.pno { color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; }
+.ph { position: relative; width: 84px; height: 84px; margin: 0 auto 8px; border-radius: 50%; overflow: hidden;
+  background: var(--hover); display: grid; place-items: center; color: var(--muted); font-size: 28px; font-weight: 700; }
+.ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.ph.big { width: 112px; height: 112px; margin: 0; border-radius: 12px; font-size: 40px; flex: none; }
+.prof { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
+.prof .pt { font-size: 18px; margin-bottom: 6px; }
+.prof dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; font-size: 13px; }
+.prof dt { color: var(--muted); }
+.prof dd { margin: 0; }
 .nrow { display: grid; grid-template-columns: 110px 1fr; font-size: 13px; line-height: 1.9; }
 .nrow > span:first-child { color: var(--muted); }
 .filters { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
@@ -191,7 +208,7 @@ function upcoming() {
 function tabs() {
   const stages = Object.entries(DATA.stages);
   $("#stageTabs").innerHTML = stages.map(([k, s]) => `<button data-s="${k}" class="${k === stage ? "on" : ""}">${s.label}</button>`).join("");
-  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"]]
+  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["players", "선수"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"]]
     .map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}</button>`).join("");
   document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; delete pagers.games; render(); });
   document.querySelectorAll("#viewTabs button").forEach((b) => b.onclick = () => { view = b.dataset.v; render(); });
@@ -329,6 +346,55 @@ function teamView() {
   </div>`;
 }
 
+// ── 선수 탭 ── 포지션별로 묶어 등번호 순으로 카드를 보여준다 (사진은 네이버 이미지 서버에서 바로 불러옴)
+const GROUP_ORDER = ["투수", "포수", "내야수", "외야수", "지명타자", "야수"];
+const pinfo = (pid) => DATA.players[pid] || {};
+const photo = (pid, name, cls = "") => {
+  const img = pinfo(pid).image;
+  return `<div class="ph ${cls}"><span>${esc((name || "?").slice(0, 1))}</span>${img ? `<img src="${esc(img)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</div>`;
+};
+
+function playersView() {
+  const s = DATA.stages[stage];
+  if (!s) return `<div class="empty">기록 없음</div>`;
+  const bat = new Map(s.batting.map((r) => [r.player_id, r]));
+  const pit = new Map(s.pitching.map((r) => [r.player_id, r]));
+  const groups = {};
+  for (const pid of new Set([...bat.keys(), ...pit.keys()])) (groups[pinfo(pid).group || "야수"] ||= []).push(pid);
+  const num = (pid) => { const n = parseInt(pinfo(pid).no, 10); return Number.isNaN(n) ? 1000 : n; };
+  const card = (pid) => {
+    const p = pinfo(pid), b = bat.get(pid), pt = pit.get(pid);
+    const name = (pt || b).name;
+    const line = p.group === "투수" && pt
+      ? `${pt.g}경기 ${pt.w}승 ${pt.l}패${pt.sv ? ` ${pt.sv}세` : ""}${pt.hld ? ` ${pt.hld}홀` : ""} · ERA ${rate(pt.era, 2)}`
+      : b ? `${b.g}경기 · 타율 ${rate(b.avg)} · ${b.hr}홈런 ${b.rbi}타점` : `${pt.g}경기 · ERA ${rate(pt.era, 2)}`;
+    const moved = (b && b.official) || (pt && pt.official);
+    return `<div class="pcard" data-pid="${pid}">${photo(pid, name)}
+      <div class="nm">${p.no ? `<span class="pno">${esc(p.no)}</span> ` : ""}${esc(name)}${moved ? `<span class="tag">이적</span>` : ""}</div>
+      <div class="ps">${esc([p.pos, p.type].filter(Boolean).join(" · "))}</div><div class="st">${line}</div></div>`;
+  };
+  const total = Object.values(groups).reduce((n, g) => n + g.length, 0);
+  return `<p class="note">${DATA.season} ${esc(s.label)} 출전 선수 ${total}명 · 등번호는 그 시즌 기준, 사진·프로필은 현재 기준 · 카드를 누르면 경기별 기록</p>`
+    + GROUP_ORDER.filter((g) => groups[g]).map((g) => `<h3 class="grp">${g} <span class="muted">${groups[g].length}</span></h3>
+      <div class="pgrid">${groups[g].sort((a, b) => num(a) - num(b)).map(card).join("")}</div>`).join("");
+}
+
+// 선수 창 맨 위 프로필
+function profileHeader(pid, name) {
+  const p = DATA.players[pid];
+  if (!p) return "";
+  const facts = [
+    ["포지션", [p.pos, p.type].filter(Boolean).join(" · ")],
+    ["생년월일", p.birth ? p.birth.replaceAll("-", ".") : ""],
+    ["키 / 몸무게", p.height ? `${p.height}cm / ${p.weight}kg` : ""],
+    ["출신", p.career], ["드래프트", p.draft], ["연봉", p.salary],
+    [`${DATA.season} WAR`, p.war != null ? p.war.toFixed(2) : ""],
+  ].filter(([, v]) => v);
+  return `<div class="prof">${photo(pid, name, "big")}<div>
+    <div class="pt">${p.no ? `<span class="pno">${esc(p.no)}</span> ` : ""}<b>${esc(name)}</b></div>
+    <dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div></div>`;
+}
+
 // 시즌 중 다른 팀에서 뛴 선수: 두산 기록과 공식 시즌 기록을 나란히 보여준다
 function transferNotice(pid) {
   const reg = DATA.stages.regular;
@@ -364,13 +430,13 @@ function playerLog(pid) {
     html += `<h3>타격 기록 (${realBat.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">위치</th><th>타수</th><th>득점</th><th>안타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th class="l">타석 결과</th></tr></thead>${body}</table></div>${more}`;
   }
   $("#dlgTitle").textContent = `${name} — ${DATA.season} 경기별 기록`;
-  $("#dlgBody").innerHTML = transferNotice(pid) + (html || `<div class="empty">기록 없음</div>`);
+  $("#dlgBody").innerHTML = profileHeader(pid, name) + transferNotice(pid) + (html || `<div class="empty">기록 없음</div>`);
   $("#dlg").showModal();
 }
 
 function render() {
   tabs();
-  $("#view").innerHTML = view === "games" ? gamesView() : view === "team" ? teamView() : statsView(view);
+  $("#view").innerHTML = view === "games" ? gamesView() : view === "team" ? teamView() : view === "players" ? playersView() : statsView(view);
   document.querySelectorAll("th.sort").forEach((th) => th.onclick = () => {
     const st = sortState[view];
     sortState[view] = [th.dataset.k, st[0] === th.dataset.k ? -st[1] : (th.dataset.k === "name" ? 1 : -1)];
@@ -385,6 +451,8 @@ document.addEventListener("click", (e) => {
   if (t.classList.contains("name")) return playerLog(t.dataset.pid);
   const more = t.closest("[data-more]");
   if (more) return showMore(more.dataset.more);
+  const card = t.closest(".pcard");
+  if (card) return playerLog(card.dataset.pid);
   const tr = t.closest("tr.game");
   if (tr) toggleBox(tr);
 });
