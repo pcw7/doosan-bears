@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>두산 베어스 기록</title>
+<style>
+:root {
+  --navy: #131230; --red: #d4202c;
+  --bg: #f5f6fa; --card: #ffffff; --text: #1b1d29; --muted: #6b6f80; --line: #e3e5ee;
+  --win: #1f6feb; --loss: #d4202c; --draw: #8b8f9c; --hover: #f0f2f8; --accent: var(--navy);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1020; --card: #181a2e; --text: #e8e9f0; --muted: #9a9db0; --line: #2a2d45;
+    --win: #5b9dff; --loss: #ff5a5f; --draw: #7c8091; --hover: #212440; --accent: #8f9bff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.5 "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
+header { background: var(--navy); color: #fff; padding: 28px 16px 22px; border-bottom: 4px solid var(--red); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+header .wrap { padding: 0; }
+h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
+.sub { color: #b9bbd6; font-size: 13px; }
+.summary { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 18px; align-items: flex-end; }
+.stat .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat .k { font-size: 12px; color: #b9bbd6; }
+.strip { display: flex; gap: 3px; }
+.strip span { width: 22px; height: 22px; border-radius: 4px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; color: #fff; }
+.W { background: var(--win); } .L { background: var(--loss); } .D { background: var(--draw); }
+main { padding: 20px 0 60px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.card h2 { margin: 0 0 12px; font-size: 16px; }
+.upcoming { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.up { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.up .d { color: var(--muted); font-size: 12px; }
+.up .o { font-weight: 600; margin-top: 2px; }
+.live { color: var(--red); font-weight: 700; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tabs button { border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 6px 12px;
+  border-radius: 999px; cursor: pointer; font: inherit; }
+.tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { .tabs button.on { color: #0f1020; } }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+th.sort { cursor: pointer; user-select: none; }
+th.sort:hover { color: var(--text); }
+th.asc::after { content: " ▲"; } th.desc::after { content: " ▼"; }
+td.l, th.l { text-align: left; }
+tbody tr:hover { background: var(--hover); }
+.name { color: var(--accent); cursor: pointer; font-weight: 600; }
+.name:hover { text-decoration: underline; }
+.res { display: inline-block; width: 22px; text-align: center; border-radius: 4px; color: #fff; font-weight: 700; font-size: 12px; }
+.muted { color: var(--muted); }
+tr.game { cursor: pointer; }
+tr.box > td { padding: 0; background: var(--hover); }
+.boxin { padding: 12px; display: grid; gap: 12px; }
+.boxin table { background: var(--card); border-radius: 6px; }
+.notes { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.notes b { color: var(--text); font-weight: 600; }
+.pa { font-size: 12px; color: var(--muted); text-align: left; }
+.filters { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
+dialog { border: none; border-radius: 12px; padding: 0; width: min(920px, 96vw); max-height: 88vh;
+  background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog::backdrop { background: rgba(10, 10, 30, .55); }
+dialog .hd { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--card); }
+dialog .bd { padding: 12px 16px 16px; overflow: auto; max-height: calc(88vh - 56px); }
+dialog button.x { border: none; background: none; color: var(--muted); font-size: 22px; cursor: pointer; }
+.empty { color: var(--muted); padding: 20px 0; text-align: center; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 20px; line-height: 1.9; }
+footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header><div class="wrap" id="hdr"></div></header>
+<main class="wrap">
+  <section class="card" id="upcomingCard" hidden><h2>다음 경기</h2><div class="upcoming" id="upcoming"></div></section>
+  <section class="card">
+    <div class="tabs" id="stageTabs"></div>
+    <div class="tabs" id="viewTabs"></div>
+    <div id="view"></div>
+  </section>
+</main>
+<footer id="foot"></footer>
+<dialog id="dlg"><div class="hd"><strong id="dlgTitle"></strong><button class="x" onclick="dlg.close()">×</button></div><div class="bd" id="dlgBody"></div></dialog>
+
+<script>
+const DATA = /*__DATA__*/null;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const rate = (v, d = 3) => v == null ? "-" : (d === 3 ? v.toFixed(3).replace(/^0/, "") : v.toFixed(d));
+const DEC = { W: "승", L: "패", S: "세", H: "홀" };
+const RES = { W: "승", L: "패", D: "무" };
+const fmtDate = (d) => { const [, m, day] = d.split("-"); const w = "일월화수목금토"[new Date(d + "T00:00").getDay()]; return `${+m}/${+day}(${w})`; };
+const vs = (g) => (g.ha === "H" ? "vs " : "@ ") + g.opp;
+const finals = DATA.games.filter((g) => g.status === "FINAL");
+let stage = Object.keys(DATA.stages)[0] || "regular";
+let view = "games";
+
+function header() {
+  const reg = DATA.stages.regular;
+  const r = reg ? reg.record : null;
+  const st = DATA.standings;
+  const recent = finals.filter((g) => g.stage === "regular").slice(-10);
+  let streak = "";
+  const last = finals.filter((g) => g.stage === "regular" && g.result !== "D");
+  if (last.length) {
+    const t = last[last.length - 1].result; let n = 0;
+    for (let i = last.length - 1; i >= 0 && last[i].result === t; i--) n++;
+    streak = `${n}연${t === "W" ? "승" : "패"}`;
+  }
+  $("#hdr").innerHTML = `
+    <h1>${esc(DATA.team)} ${DATA.season} 시즌 기록</h1>
+    <div class="sub">마지막 동기화 ${esc((DATA.lastSync || "").replace("T", " "))} · 리포트 생성 ${esc(DATA.generatedAt)}</div>
+    <div class="summary">
+      ${r ? `<div class="stat"><div class="v">${r.w}승 ${r.l}패 ${r.d}무</div><div class="k">정규시즌 (${r.g}경기)</div></div>
+             <div class="stat"><div class="v">${rate(r.pct)}</div><div class="k">승률</div></div>` : ""}
+      ${st && st.rank ? `<div class="stat"><div class="v">${st.rank}위</div><div class="k">순위 (${esc(st.as_of)} 기준)</div></div>` : ""}
+      ${r ? `<div class="stat"><div class="v">${r.rs} / ${r.ra}</div><div class="k">득점 / 실점</div></div>` : ""}
+      ${streak ? `<div class="stat"><div class="v">${streak}</div><div class="k">현재 연속</div></div>` : ""}
+      ${recent.length ? `<div class="stat"><div class="strip">${recent.map((g) => `<span class="${g.result}" title="${fmtDate(g.date)} ${esc(vs(g))} ${g.ts}-${g.os}">${RES[g.result]}</span>`).join("")}</div><div class="k">최근 ${recent.length}경기</div></div>` : ""}
+    </div>`;
+}
+
+function upcoming() {
+  const n = new Date();
+  const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  const list = DATA.games.filter((g) => (g.status === "SCHEDULED" || g.status === "LIVE") && g.date >= today).slice(0, 4);
+  if (!list.length) return;
+  $("#upcomingCard").hidden = false;
+  $("#upcoming").innerHTML = list.map((g) => `
+    <div class="up"><div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${esc(g.round)}</div>
+    <div class="o">${esc(vs(g))} ${g.status === "LIVE" ? '<span class="live">● 진행 중</span>' : ""}</div>
+    <div class="d">선발: ${esc(g.starter || "미정")} vs ${esc(g.oppStarter || "미정")}</div></div>`).join("");
+}
+
+function tabs() {
+  const stages = Object.entries(DATA.stages);
+  $("#stageTabs").innerHTML = stages.map(([k, s]) => `<button data-s="${k}" class="${k === stage ? "on" : ""}">${s.label}</button>`).join("");
+  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["batting", "타자 기록"], ["pitching", "투수 기록"]]
+    .map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}</button>`).join("");
+  document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; render(); });
+  document.querySelectorAll("#viewTabs button").forEach((b) => b.onclick = () => { view = b.dataset.v; render(); });
+}
+
+function boxScore(g) {
+  const inn = g.line || { team: [], opponent: [] };
+  const n = Math.max(9, (inn.team || []).length, (inn.opponent || []).length);
+  const cells = (arr) => Array.from({ length: n }, (_, i) => `<td>${arr && arr[i] != null ? arr[i] : ""}</td>`).join("");
+  const [th, te, tb, oh, oe, ob] = g.rheb;
+  const awayFirst = g.ha === "A";
+  const teamRow = `<tr><td class="l"><b>두산</b></td>${cells(inn.team)}<td><b>${g.ts}</b></td><td>${th ?? ""}</td><td>${te ?? ""}</td><td>${tb ?? ""}</td></tr>`;
+  const oppRow = `<tr><td class="l">${esc(g.opp)}</td>${cells(inn.opponent)}<td><b>${g.os}</b></td><td>${oh ?? ""}</td><td>${oe ?? ""}</td><td>${ob ?? ""}</td></tr>`;
+  const line = `<div class="scroll"><table><thead><tr><th class="l"></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join("")}<th>R</th><th>H</th><th>E</th><th>B</th></tr></thead>
+    <tbody>${awayFirst ? teamRow + oppRow : oppRow + teamRow}</tbody></table></div>`;
+  const bat = `<div class="scroll"><table><thead><tr><th>타순</th><th class="l">선수</th><th class="l">위치</th><th>타수</th><th>득점</th><th>안타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th>도루</th><th class="l">타석 결과</th></tr></thead><tbody>
+    ${g.bat.map((b) => `<tr><td>${b.sub ? "" : b.o}</td><td class="l">${b.sub ? "&nbsp;&nbsp;" : ""}<span class="name" data-pid="${b.pid}">${esc(b.name)}</span></td><td class="l">${esc(b.pos)}</td>
+      <td>${b.ab}</td><td>${b.r}</td><td>${b.h}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.bb}</td><td>${b.so}</td><td>${b.sb}</td><td class="pa">${esc(b.res)}</td></tr>`).join("")}
+    </tbody></table></div>`;
+  const pit = `<div class="scroll"><table><thead><tr><th class="l">투수</th><th>결과</th><th>이닝</th><th>타자</th><th>피안타</th><th>실점</th><th>자책</th><th>볼넷</th><th>삼진</th><th>피홈런</th><th>투구수</th></tr></thead><tbody>
+    ${g.pit.map((p) => `<tr><td class="l"><span class="name" data-pid="${p.pid}">${esc(p.name)}</span></td><td>${DEC[p.dec] || ""}</td><td>${esc(p.ip)}</td><td>${p.bf}</td><td>${p.h}</td><td>${p.r}</td><td>${p.er}</td><td>${p.bb}</td><td>${p.so}</td><td>${p.hr}</td><td>${p.np}</td></tr>`).join("")}
+    </tbody></table></div>`;
+  const notes = g.notes.length ? `<div class="notes">${g.notes.map((n) => `<b>${esc(n.how)}</b> ${esc(n.result)}`).join("<br>")}</div>` : "";
+  return `<div class="boxin">${line}${bat}${pit}${notes}</div>`;
+}
+
+function gamesView() {
+  const list = DATA.games.filter((g) => g.stage === stage && (g.status === "FINAL" || g.status === "CANCELLED")).reverse();
+  if (!list.length) return `<div class="empty">기록된 경기가 없습니다</div>`;
+  return `<div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">구장</th><th>스코어</th><th>결과</th><th class="l">승리투수</th><th class="l">패전투수</th><th class="l">세이브</th><th class="l">선발</th></tr></thead><tbody>
+    ${list.map((g) => g.status === "CANCELLED"
+      ? `<tr class="muted"><td class="l">${fmtDate(g.date)}</td><td class="l">${esc(vs(g))}</td><td class="l">${esc(g.stadium || "")}</td><td colspan="6" class="l">경기 취소</td></tr>`
+      : `<tr class="game" data-id="${g.id}"><td class="l">${fmtDate(g.date)}</td><td class="l">${esc(vs(g))}</td><td class="l">${esc(g.stadium || "")}</td>
+         <td><b>${g.ts}</b> : ${g.os}</td><td><span class="res ${g.result}">${RES[g.result]}</span></td>
+         <td class="l">${esc(g.wp || "")}</td><td class="l">${esc(g.lp || "")}</td><td class="l">${esc(g.sp || "")}</td><td class="l">${esc(g.starter || "")}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+
+const BAT_COLS = [["name", "선수", "l"], ["g", "경기"], ["pa", "타석"], ["ab", "타수"], ["r", "득점"], ["h", "안타"], ["b2", "2루타"], ["b3", "3루타"], ["hr", "홈런"], ["rbi", "타점"], ["bb", "볼넷"], ["hbp", "사구"], ["so", "삼진"], ["sb", "도루"], ["avg", "타율", "r3"], ["obp", "출루율", "r3"], ["slg", "장타율", "r3"], ["ops", "OPS", "r3"]];
+const PIT_COLS = [["name", "선수", "l"], ["g", "경기"], ["gs", "선발"], ["w", "승"], ["l", "패"], ["sv", "세"], ["hld", "홀"], ["outs", "이닝", "ip"], ["h", "피안타"], ["r", "실점"], ["er", "자책"], ["bb", "볼넷"], ["so", "삼진"], ["hr", "피홈런"], ["era", "ERA", "r2"], ["whip", "WHIP", "r2"], ["k9", "K/9", "r2"], ["pitches", "투구수"]];
+const sortState = { batting: ["pa", -1], pitching: ["outs", -1] };
+let qualifiedOnly = false;
+
+function statsView(kind) {
+  const s = DATA.stages[stage];
+  if (!s) return "";
+  const cols = kind === "batting" ? BAT_COLS : PIT_COLS;
+  let rows = s[kind].slice();
+  const g = s.record.g;
+  const minPa = Math.floor(g * 3.1), minOuts = g * 3;
+  if (qualifiedOnly) rows = rows.filter((r) => kind === "batting" ? r.pa >= minPa : r.outs >= minOuts);
+  const [key, dir] = sortState[kind];
+  rows.sort((a, b) => {
+    const x = a[key], y = b[key];
+    if (x == null) return 1; if (y == null) return -1;
+    return typeof x === "string" ? dir * x.localeCompare(y, "ko") : dir * (x - y);
+  });
+  const fmt = (r, [k, , t]) => t === "r3" ? rate(r[k]) : t === "r2" ? rate(r[k], 2) : t === "ip" ? esc(r.ip) : r[k];
+  const label = kind === "batting" ? `규정타석(${minPa}) 이상만` : `규정이닝(${g}) 이상만`;
+  return `<div class="filters"><label><input type="checkbox" id="qual" ${qualifiedOnly ? "checked" : ""}> ${label}</label><span>${rows.length}명 · 열 제목을 누르면 정렬</span></div>
+    <div class="scroll"><table><thead><tr>${cols.map(([k, l, t]) => `<th class="sort ${t === "l" ? "l" : ""} ${k === key ? (dir > 0 ? "asc" : "desc") : ""}" data-k="${k}">${l}</th>`).join("")}</tr></thead><tbody>
+    ${rows.map((r) => `<tr>${cols.map((c) => c[0] === "name" ? `<td class="l"><span class="name" data-pid="${r.player_id}">${esc(r.name)}</span></td>` : `<td>${fmt(r, c)}</td>`).join("")}</tr>`).join("")}
+    </tbody></table></div>`;
+}
+
+function playerLog(pid) {
+  const bat = [], pit = [];
+  let name = "";
+  for (const g of finals) {
+    const b = g.bat.find((x) => x.pid === pid); if (b) { bat.push([g, b]); name = b.name; }
+    const p = g.pit.find((x) => x.pid === pid); if (p) { pit.push([g, p]); name = p.name; }
+  }
+  let html = "";
+  if (pit.length) {
+    html += `<h3>투구 기록 (${pit.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th>결과</th><th>이닝</th><th>피안타</th><th>실점</th><th>자책</th><th>볼넷</th><th>삼진</th><th>투구수</th></tr></thead><tbody>
+      ${pit.reverse().map(([g, p]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${esc(vs(g))} <span class="res ${g.result}">${RES[g.result]}</span></td><td>${DEC[p.dec] || (p.gs ? "선발" : "")}</td><td>${esc(p.ip)}</td><td>${p.h}</td><td>${p.r}</td><td>${p.er}</td><td>${p.bb}</td><td>${p.so}</td><td>${p.np}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+  const realBat = bat.filter(([, b]) => b.pa > 0 || b.pos !== "투");
+  if (realBat.length) {
+    html += `<h3>타격 기록 (${realBat.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">위치</th><th>타수</th><th>득점</th><th>안타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th class="l">타석 결과</th></tr></thead><tbody>
+      ${realBat.reverse().map(([g, b]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${esc(vs(g))} <span class="res ${g.result}">${RES[g.result]}</span></td><td class="l">${esc(b.pos)}</td><td>${b.ab}</td><td>${b.r}</td><td>${b.h}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.bb}</td><td>${b.so}</td><td class="pa">${esc(b.res)}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+  $("#dlgTitle").textContent = `${name} — ${DATA.season} 경기별 기록`;
+  $("#dlgBody").innerHTML = html || `<div class="empty">기록 없음</div>`;
+  $("#dlg").showModal();
+}
+
+function render() {
+  tabs();
+  $("#view").innerHTML = view === "games" ? gamesView() : statsView(view);
+  document.querySelectorAll("tr.game").forEach((tr) => tr.onclick = (e) => {
+    if (e.target.classList.contains("name")) return;
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains("box")) { next.remove(); return; }
+    const g = DATA.games.find((x) => x.id === tr.dataset.id);
+    tr.insertAdjacentHTML("afterend", `<tr class="box"><td colspan="9">${boxScore(g)}</td></tr>`);
+  });
+  document.querySelectorAll("th.sort").forEach((th) => th.onclick = () => {
+    const st = sortState[view];
+    sortState[view] = [th.dataset.k, st[0] === th.dataset.k ? -st[1] : (th.dataset.k === "name" ? 1 : -1)];
+    if (["era", "whip"].includes(th.dataset.k) && st[0] !== th.dataset.k) sortState[view][1] = 1;
+    render();
+  });
+  const q = $("#qual"); if (q) q.onchange = () => { qualifiedOnly = q.checked; render(); };
+}
+
+document.addEventListener("click", (e) => { if (e.target.classList.contains("name")) playerLog(e.target.dataset.pid); });
+header(); upcoming(); render();
+$("#foot").innerHTML = `데이터 출처: 네이버 스포츠 · 경기 ${finals.length}개 기록됨<br>CSV 다운로드:
+  <a href="csv/games.csv">경기 결과</a> · <a href="csv/batting_games.csv">경기별 타자</a> · <a href="csv/pitching_games.csv">경기별 투수</a> ·
+  <a href="csv/batting_season_${DATA.season}.csv">시즌 타자</a> · <a href="csv/pitching_season_${DATA.season}.csv">시즌 투수</a>`;
+</script>
+</body>
+</html>

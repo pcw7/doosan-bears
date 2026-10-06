@@ -1,0 +1,64 @@
+# 두산 베어스 기록 자동 수집기
+
+두산 경기가 끝날 때마다 경기 결과와 선수별 기록(타격·투구)을 자동으로 모아 웹 대시보드로 보여줍니다.
+GitHub Actions가 매시간 새 경기를 확인해 수집하고, 결과를 GitHub Pages에 배포합니다.
+Python 표준 라이브러리만 사용하므로 따로 설치할 패키지가 없습니다.
+
+## 동작 방식
+
+```
+GitHub Actions (한국시간 17:00~01:00 매시 정각)
+  → 네이버 스포츠에서 두산 일정 확인
+  → 새로 끝난 경기의 박스스코어를 data/games/에 저장하고 커밋
+  → 대시보드(HTML)와 CSV 생성
+  → GitHub Pages에 배포
+```
+
+- 저장소에 들어가는 데이터는 `data/games/<시즌>/<경기ID>.json` 뿐입니다. 경기마다 파일 하나이고, 한 번 저장하면 바뀌지 않습니다.
+- SQLite DB(`data/doosan.db`), 대시보드, CSV는 이 파일들로 실행할 때마다 다시 만들어집니다. 그래서 커밋하지 않습니다.
+- 경기가 없는 시간에 실행되면 커밋 없이 대시보드만 갱신합니다. 다음 경기, 진행 중 표시, 마지막 동기화 시각이 여기에 해당합니다.
+
+## 구성
+
+```
+doosan_tracker/
+  naver.py      네이버 스포츠 API 호출 (일정, 박스스코어)
+  archive.py    경기별 원본 JSON 보관 (data/games)
+  parse.py      원본 → 경기/타자/투수 행 변환 (2루타·3루타·사구·희생타는 타석 결과에서 계산)
+  db.py         SQLite 스키마와 저장
+  sync.py       원본에서 DB 복원 → 새로 끝난 경기만 수집
+  stats.py      시즌 누적 기록 집계 (타율/출루율/장타율/OPS, ERA/WHIP/K9)
+  export.py     CSV 내보내기
+  report.py     대시보드 생성 (templates/report.html)
+.github/workflows/sync.yml   자동 수집 + Pages 배포
+```
+
+## 내 PC에서 실행하기
+
+```powershell
+git pull                            # Actions가 수집한 최신 경기 받기
+python -m doosan_tracker report     # reports/index.html, reports/csv/ 생성
+python -m doosan_tracker status     # DB 현황
+python -m doosan_tracker sync --from 2025-03-01 --to 2025-11-30   # 지난 시즌 수집 (커밋하면 Actions에도 반영)
+```
+
+자동 수집은 Actions가 맡습니다. PC에서 `sync`를 정기 실행하면 같은 파일을 두 곳에서 만들어 `git pull`할 때 충돌하니 피하세요.
+지난 시즌처럼 Actions가 수집하지 않는 기간을 직접 받았다면 `data/games`를 커밋하고 push하면 됩니다.
+
+## 수동 실행과 문제 해결
+
+- 지금 바로 수집하려면 GitHub 저장소의 **Actions → 경기 기록 수집 & 배포 → Run workflow**를 누르세요.
+- 실행이 실패하면 GitHub가 메일로 알려줍니다. Actions 실행 기록에서 로그를 확인하세요.
+- 공개 저장소는 60일 동안 활동(커밋)이 없으면 GitHub가 예약 실행을 자동으로 끕니다. 비시즌(11~2월)이 지나면 개막 전에 Actions 탭에서 워크플로를 다시 켜 주세요.
+- 데이터는 네이버 스포츠의 비공개 API에서 가져옵니다. 응답 구조가 바뀌면 수집이 실패할 수 있습니다.
+
+## 데이터
+
+| 테이블 | 내용 |
+|---|---|
+| `games` | 경기별 결과, 스코어, 이닝별 점수, 승·패·세이브 투수, 결승타·홈런 등 |
+| `batting` | 경기별 타자 기록 (양 팀), 타석 결과 (`좌2 3땅 중안 삼진`) |
+| `pitching` | 경기별 투수 기록 (양 팀), 이닝, 투구수, 승/패/세/홀 |
+
+`stage` 값으로 정규시즌(`regular`), 포스트시즌(`postseason`), 시범경기(`exhibition`)를 구분합니다.
+2026-10-06에 확인했을 때 시즌 누적 타율·ERA·승패·세이브가 네이버 공식 기록과 모두 일치했습니다.

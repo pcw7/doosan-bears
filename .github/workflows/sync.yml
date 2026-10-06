@@ -1,0 +1,62 @@
+name: 경기 기록 수집 & 배포
+
+on:
+  schedule:
+    - cron: "0 8-16 * * *"   # 한국시간 매일 17:00 ~ 01:00 매시 정각 (GitHub 사정으로 몇 분~수십 분 늦을 수 있음)
+  workflow_dispatch:          # Actions 탭에서 수동 실행
+  push:
+    branches: [main]
+    paths: ["doosan_tracker/**", ".github/workflows/**"]
+
+permissions:
+  contents: write   # 새 경기 원본(data/games) 커밋
+  pages: write
+  id-token: write
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Seoul
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # 일부 경기 수집에 실패해도(종료 코드 1) 받은 경기는 커밋·배포하고, 실행 결과는 실패로 표시해 알림을 받는다
+      - name: 경기 기록 수집 + 리포트 생성
+        run: python -m doosan_tracker sync
+
+      - name: 새 경기 원본 커밋
+        if: ${{ !cancelled() }}
+        run: |
+          git add data/games
+          if git diff --cached --quiet; then
+            echo "새로 끝난 경기 없음"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "기록 추가: $(git diff --cached --name-only | wc -l)경기 ($(date +'%Y-%m-%d %H:%M'))"
+            git pull --rebase
+            git push
+          fi
+
+      - if: ${{ !cancelled() }}
+        uses: actions/configure-pages@v6
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: reports
+      - id: deploy
+        if: ${{ !cancelled() }}
+        uses: actions/deploy-pages@v5
