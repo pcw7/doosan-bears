@@ -4,7 +4,7 @@ import shutil
 from datetime import date, datetime
 from pathlib import Path
 
-from . import db, players, stats
+from . import db, league, players, stats
 from .config import ROUND_NAMES, TEAM_CODE, TEAM_NAME
 
 TEMPLATE = Path(__file__).parent / "templates" / "report.html"
@@ -81,6 +81,7 @@ def build_data(conn, season: int, all_seasons: list[int]) -> dict:
         "finished": remaining == 0,
         "stages": stages, "games": _games(conn, season),
         "players": _players(conn, season, current=season == all_seasons[0]),
+        "league": league.load(season),  # 왼쪽 순위표 (리그 전체 팀)
     }
 
 

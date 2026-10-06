@@ -50,10 +50,10 @@ jobs:
         env:
           DOOSAN_ARCHIVE_KEY: ${{ secrets.DOOSAN_ARCHIVE_KEY }}   # 원본 암호 키 (저장소 Settings → Secrets)
 
-      - name: 새 경기 원본·선수 정보 커밋
+      - name: 새 경기 원본·선수 정보·순위표 커밋
         if: ${{ !cancelled() }}
         run: |
-          git add data/games data/players
+          git add data/games data/players data/standings
           if git diff --cached --quiet; then
             echo "바뀐 데이터 없음"
           else
@@ -61,7 +61,7 @@ jobs:
             git config user.name "pcw7"
             git config user.email "58602643+pcw7@users.noreply.github.com"
             n=$(git diff --cached --name-only -- data/games | wc -l)
-            if [ "$n" -gt 0 ]; then msg="기록 추가: ${n}경기"; else msg="선수 정보 갱신"; fi
+            if [ "$n" -gt 0 ]; then msg="기록 추가: ${n}경기"; else msg="선수 정보·순위 갱신"; fi
             git commit -m "$msg ($(date +'%Y-%m-%d %H:%M'))"
             git pull --rebase
             git push

@@ -78,6 +78,11 @@ def fetch_lineups(game_id: str) -> dict:
     return {"home": relay.get("homeLineup") or {}, "away": relay.get("awayLineup") or {}}
 
 
+def fetch_team_stats(season: int) -> list[dict]:
+    """그 시즌 정규시즌 팀 순위·기록 (전체 팀)."""
+    return _get(f"/statistics/categories/kbo/seasons/{season}/teams").get("seasonTeamStats") or []
+
+
 def fetch_player(season: int, player_id: str) -> dict:
     """선수 프로필(현재 기준)과 그 시즌 기록. {"player": {...}, "hitterStats": {...}, "pitcherStats": {...}}"""
     return _get(f"/statistics/categories/kbo/seasons/{season}/players/{player_id}")

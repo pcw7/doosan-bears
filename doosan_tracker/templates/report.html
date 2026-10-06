@@ -21,7 +21,23 @@ body { margin: 0; background: var(--bg); color: var(--text);
   font: 14px/1.5 "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
 header { background: var(--navy); color: #fff; padding: 28px 16px 22px; border-bottom: 4px solid var(--red); }
 .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
-header .wrap { padding: 0; }
+header .wrap { padding: 0; max-width: 1148px; }
+/* 좁은 화면: 순위표는 본문 위에 접힌 상태 / 넓은 화면: 왼쪽에 펼쳐 두고 스크롤을 따라다님 */
+.layout { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+main { min-width: 0; }
+@media (min-width: 1200px) {
+  .layout { max-width: 1460px; display: grid; grid-template-columns: 272px minmax(0, 1fr); gap: 20px; align-items: start; }
+  header .wrap { max-width: 1428px; }
+  #side { position: sticky; top: 16px; }
+  #side summary { display: none; }
+}
+#side .card { padding: 12px 12px 10px; }
+#side summary { cursor: pointer; font-weight: 600; }
+.side-hd { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0; }
+.side-hd span { font-size: 12px; color: var(--muted); }
+table.stand th, table.stand td { padding: 5px 4px; font-size: 12.5px; }
+table.stand tr.me td { background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 700; }
+table.stand tr.cut td { border-bottom: 1.5px dashed var(--muted); }
 h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
 #seasonSel { font: inherit; color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .35);
   border-radius: 8px; padding: 0 4px; cursor: pointer; }
@@ -34,7 +50,6 @@ h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
 .strip span { width: 22px; height: 22px; border-radius: 4px; display: grid; place-items: center;
   font-size: 11px; font-weight: 700; color: #fff; }
 .W { background: var(--win); } .L { background: var(--loss); } .D { background: var(--draw); }
-main { padding: 20px 0 60px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
 .card h2 { margin: 0 0 12px; font-size: 16px; }
 .upcoming { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
@@ -125,14 +140,17 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 20px
 </head>
 <body>
 <header><div class="wrap" id="hdr"></div></header>
-<main class="wrap">
-  <section class="card" id="upcomingCard" hidden><h2>다음 경기</h2><div class="upcoming" id="upcoming"></div></section>
-  <section class="card">
-    <div class="tabs" id="stageTabs"></div>
-    <div class="tabs" id="viewTabs"></div>
-    <div id="view"></div>
-  </section>
-</main>
+<div class="layout">
+  <aside id="side" hidden></aside>
+  <main>
+    <section class="card" id="upcomingCard" hidden><h2>다음 경기</h2><div class="upcoming" id="upcoming"></div></section>
+    <section class="card">
+      <div class="tabs" id="stageTabs"></div>
+      <div class="tabs" id="viewTabs"></div>
+      <div id="view"></div>
+    </section>
+  </main>
+</div>
 <footer id="foot"></footer>
 <dialog id="dlg"><div class="hd"><strong id="dlgTitle"></strong><button class="x" onclick="dlg.close()">×</button></div><div class="bd" id="dlgBody"></div></dialog>
 
@@ -207,6 +225,28 @@ function upcoming() {
     <div class="up"><div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${esc(g.round)}</div>
     <div class="o">${opp(g)} ${g.status === "LIVE" ? '<span class="live">● 진행 중</span>' : ""}</div>
     <div class="d">선발: ${esc(g.starter || "미정")} vs ${esc(g.oppStarter || "미정")}</div></div>`).join("");
+}
+
+// 왼쪽 리그 순위표. 점선 위가 포스트시즌 진출권 (2014년까지 상위 4팀, 2015년부터 5팀)
+function standings() {
+  const L = DATA.league;
+  if (!L || !L.teams.length) return;
+  const cut = DATA.season <= 2014 ? 4 : 5;
+  const me = L.teams.find((t) => t.id === "OB");
+  const when = DATA.finished ? "최종" : `${fmtDate(L.as_of)} 기준`;
+  const gb = (v) => !v ? "-" : (Number.isInteger(v) ? v : v.toFixed(1));
+  const rows = L.teams.map((t, i) => `<tr class="${t.id === "OB" ? "me" : ""} ${i === cut - 1 ? "cut" : ""}" title="${esc(`최근 5경기 ${t.last5 || "-"} · ${t.streak || ""}`)}">
+    <td>${t.rank}</td><td class="l">${esc(t.name)}</td><td>${t.w}</td><td>${t.l}</td><td>${t.d}</td><td>${rate(t.pct)}</td><td>${gb(t.gb)}</td></tr>`).join("");
+  const side = $("#side");
+  side.hidden = false;
+  side.innerHTML = `<details class="card" id="standBox">
+    <summary>KBO 순위${me ? ` · 두산 ${me.rank}위` : ""} <span class="muted">${when}</span></summary>
+    <div class="side-hd"><b>${DATA.season} KBO 순위</b><span>${when}</span></div>
+    <table class="stand"><thead><tr><th></th><th class="l">팀</th><th>승</th><th>패</th><th>무</th><th>승률</th><th>차</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="note" style="margin: 8px 0 0">점선 위 ${cut}팀: 포스트시즌 진출${DATA.finished ? "" : "권"}</p></details>`;
+  const box = $("#standBox"), wide = matchMedia("(min-width: 1200px)");
+  box.open = wide.matches;
+  wide.addEventListener("change", (e) => { if (e.matches) box.open = true; });
 }
 
 function tabs() {
@@ -460,7 +500,7 @@ document.addEventListener("click", (e) => {
   const tr = t.closest("tr.game");
   if (tr) toggleBox(tr);
 });
-header(); upcoming(); render();
+header(); upcoming(); standings(); render();
 $("#foot").textContent = `데이터 출처: 네이버 스포츠 · 경기 ${finals.length}개 기록됨`;
 </script>
 </body>
