@@ -108,12 +108,16 @@ tr.box > td { padding: 0; background: var(--hover); }
 .nrow { display: grid; grid-template-columns: 110px 1fr; font-size: 13px; line-height: 1.9; }
 .nrow > span:first-child { color: var(--muted); }
 .filters { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
-dialog { border: none; border-radius: 12px; padding: 0; width: min(920px, 96vw); max-height: 88vh;
+/* 창 자체는 스크롤하지 않고(.bd만 스크롤) 열려 있는 동안 뒤 페이지 스크롤도 잠가 스크롤바가 하나만 보이게 한다 */
+dialog { border: none; border-radius: 12px; padding: 0; width: min(920px, 96vw); max-height: 88vh; overflow: hidden;
   background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog[open] { display: flex; flex-direction: column; }
 dialog::backdrop { background: rgba(10, 10, 30, .55); }
 dialog .hd { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px;
-  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--card); }
-dialog .bd { padding: 12px 16px 16px; overflow: auto; max-height: calc(88vh - 56px); }
+  border-bottom: 1px solid var(--line); flex: none; }
+dialog .bd { padding: 12px 16px 16px; overflow: auto; flex: 1; min-height: 0; }
+html { scrollbar-gutter: stable; }
+body:has(dialog[open]) { overflow: hidden; }
 dialog button.x { border: none; background: none; color: var(--muted); font-size: 22px; cursor: pointer; }
 .empty { color: var(--muted); padding: 20px 0; text-align: center; }
 footer { color: var(--muted); font-size: 12px; text-align: center; padding: 20px; }
