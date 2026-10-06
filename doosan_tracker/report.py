@@ -50,7 +50,28 @@ def _games(conn, season: int) -> list[dict]:
     return out
 
 
-def build_data(conn, season: int, all_seasons: list[int]) -> dict:
+def _finished(conn, season: int) -> bool:
+    """남은 경기가 없으면 끝난 시즌 (화면에 '최종 순위'로 표시)."""
+    return conn.execute("""
+        SELECT COUNT(*) FROM games WHERE season=? AND status IN ('SCHEDULED', 'LIVE', 'SUSPENDED')
+        AND game_date >= ?""", (season, date.today().isoformat())).fetchone()[0] == 0
+
+
+def history(conn, all_seasons: list[int]) -> dict:
+    """역대 기록 탭: 시즌별 팀 성적과 한 시즌 개인 기록 순위 (모든 시즌 페이지에 같은 내용)."""
+    rows = []
+    for s in sorted(all_seasons):
+        rec = stats.team_record(conn, s, "regular")
+        if not rec["g"]:
+            continue
+        table = league.table(s) or {}
+        rank = next((t["rank"] for t in table.get("teams", []) if t["id"] == TEAM_CODE), None)
+        rows.append({"season": s, **rec, "rank": rank,
+                     "post": stats.postseason_result(conn, s, _finished(conn, s))})
+    return {"seasons": rows, "records": stats.season_records(conn, [r["season"] for r in rows])}
+
+
+def build_data(conn, season: int, all_seasons: list[int], hist: dict) -> dict:
     stages = {}
     for key, label in STAGE_LABELS:
         rec = stats.team_record(conn, season, key)
@@ -69,21 +90,18 @@ def build_data(conn, season: int, all_seasons: list[int]) -> dict:
             for row in stages["regular"][kind]:
                 if row["player_id"] in moved[kind]:
                     row["official"] = moved[kind][row["player_id"]]
-    # 남은 경기가 없으면 끝난 시즌 → 화면에 '최종 순위'로 표시
-    remaining = conn.execute("""
-        SELECT COUNT(*) FROM games WHERE season=? AND status IN ('SCHEDULED', 'LIVE', 'SUSPENDED')
-        AND game_date >= ?""", (season, date.today().isoformat())).fetchone()[0]
     return {
         "team": TEAM_NAME, "season": season, "seasons": all_seasons,
         "generatedAt": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "lastSync": db.get_meta(conn, "last_sync"),
         "standings": db.get_meta(conn, f"standings:{season}"),
-        "finished": remaining == 0,
+        "finished": _finished(conn, season),
         "stages": stages, "games": _games(conn, season),
         "players": _players(conn, season, current=season == all_seasons[0]),
-        "league": league.load(season),  # 왼쪽 순위표 (리그 전체 팀)
+        "league": league.table(season),  # 왼쪽 순위표 (리그 전체 팀, 정규시즌 기준)
         # 다음 경기 미리보기 (진행 중 시즌 페이지에만)
         "previews": (db.get_meta(conn, "previews") or {}) if season == all_seasons[0] else {},
+        "history": hist,
     }
 
 
@@ -125,8 +143,8 @@ def seasons(conn) -> list[int]:
         "SELECT DISTINCT season FROM games WHERE status='FINAL' ORDER BY season DESC")]
 
 
-def render(conn, season: int, out_path: Path, all_seasons: list[int]) -> Path:
-    data = build_data(conn, season, all_seasons)
+def render(conn, season: int, out_path: Path, all_seasons: list[int], hist: dict) -> Path:
+    data = build_data(conn, season, all_seasons, hist)
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     html = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", payload)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -137,8 +155,9 @@ def render(conn, season: int, out_path: Path, all_seasons: list[int]) -> Path:
 def render_all(conn, site_dir: Path) -> list[int]:
     """시즌마다 <시즌>.html을 만들고, 최신 시즌은 index.html로도 저장한다."""
     all_seasons = seasons(conn)
+    hist = history(conn, all_seasons)  # 모든 페이지에 같은 내용이라 한 번만 계산
     for s in all_seasons:
-        render(conn, s, site_dir / f"{s}.html", all_seasons)
+        render(conn, s, site_dir / f"{s}.html", all_seasons, hist)
     if all_seasons:
         shutil.copyfile(site_dir / f"{all_seasons[0]}.html", site_dir / "index.html")
     return all_seasons

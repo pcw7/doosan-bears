@@ -3,7 +3,7 @@ import json
 from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
 
-from .config import TEAM_CODE
+from .config import ROUND_NAMES, TEAM_CODE
 
 FINAL_GAMES = "g.season=:season AND g.stage=:stage AND g.status='FINAL'"
 BAT_SUMS = """SUM(pa) pa, SUM(ab) ab, SUM(b.r) r, SUM(b.h) h, SUM(b2) b2, SUM(b3) b3, SUM(b.hr) hr,
@@ -305,3 +305,52 @@ def transfers(conn, season: int, team: str = TEAM_CODE) -> dict:
             pitching[pid] = {"g": last["season_g"], "w": last["season_w"], "l": last["season_l"],
                              "sv": last["season_s"], "era": era}
     return {"batting": batting, "pitching": pitching}
+
+
+# ── 역대 기록 ─────────────────────────────────────────
+
+def postseason_result(conn, season: int, finished: bool, team: str = TEAM_CODE) -> str | None:
+    """포스트시즌 결과: 한국시리즈 4승이면 우승, 끝난 시즌이면 마지막 라운드 탈락(한국시리즈는 준우승)."""
+    rows = conn.execute("""
+        SELECT round_code, result FROM games WHERE season=? AND stage='postseason' AND status='FINAL'
+        ORDER BY game_date, start_time, game_id""", (season,)).fetchall()
+    if not rows:
+        return None
+    if sum(r["round_code"] == "kbo_ps_ks" and r["result"] == "W" for r in rows) >= 4:
+        return "우승"
+    last = rows[-1]["round_code"]
+    if not finished:
+        return f"{ROUND_NAMES.get(last, last)} 진행 중"
+    return "준우승" if last == "kbo_ps_ks" else f"{ROUND_NAMES.get(last, last)} 탈락"
+
+
+def season_records(conn, seasons: list[int], top_n: int = 5) -> list[dict]:
+    """2008년 이후 두산 한 시즌 개인 기록 상위 N명 (정규시즌, 두산 소속 기록).
+    타율·OPS는 그 시즌 규정타석(경기수×3.1), ERA는 규정이닝(경기수) 이상만."""
+    bat, pit = [], []
+    for s in seasons:
+        g = team_record(conn, s, "regular")["g"]
+        for r in batting(conn, s, "regular"):
+            bat.append({**r, "season": s, "qualified": r["pa"] >= int(g * 3.1)})
+        for r in pitching(conn, s, "regular"):
+            pit.append({**r, "season": s, "qualified": r["outs"] >= g * 3})
+
+    def top(rows, key, fmt, highest=True, qualified=False):
+        rows = [r for r in rows if r.get(key) is not None and (r["qualified"] or not qualified)]
+        rows.sort(key=lambda r: r[key], reverse=highest)
+        return {"fmt": fmt, "rows": [{"season": r["season"], "pid": r["player_id"], "name": r["name"], "value": r[key]}
+                                     for r in rows[:top_n]]}
+
+    return [
+        {"label": "홈런", **top(bat, "hr", "n")},
+        {"label": "타점", **top(bat, "rbi", "n")},
+        {"label": "안타", **top(bat, "h", "n")},
+        {"label": "도루", **top(bat, "sb", "n")},
+        {"label": "타율", **top(bat, "avg", "avg", qualified=True)},
+        {"label": "OPS", **top(bat, "ops", "avg", qualified=True)},
+        {"label": "승", **top(pit, "w", "n")},
+        {"label": "세이브", **top(pit, "sv", "n")},
+        {"label": "홀드", **top(pit, "hld", "n")},
+        {"label": "탈삼진", **top(pit, "so", "n")},
+        {"label": "ERA", **top(pit, "era", "era", highest=False, qualified=True)},
+    ]

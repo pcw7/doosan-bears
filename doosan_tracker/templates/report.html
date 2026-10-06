@@ -124,6 +124,16 @@ tr.box > td { padding: 0; background: var(--hover); }
 .ph { position: relative; width: 84px; height: 84px; margin: 0 auto 8px; border-radius: 50%; overflow: hidden;
   background: var(--hover); display: grid; place-items: center; color: var(--muted); font-size: 28px; font-weight: 700; }
 .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.sec a { color: var(--accent); text-decoration: none; }
+.sec a:hover { text-decoration: underline; }
+tr.champ td { background: color-mix(in srgb, #e0a800 14%, transparent); }
+tr.champ .post { color: #b07d00; font-weight: 700; }
+@media (prefers-color-scheme: dark) { tr.champ .post { color: #f0c040; } }
+.recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.rec { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.rec .rk { font-weight: 700; margin-bottom: 2px; }
+.rec ol { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.9; }
+.rec li b { float: right; font-variant-numeric: tabular-nums; }
 .leads { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-bottom: 4px; }
 .pcard.lead { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; }
 .lead .lk { font-size: 12px; color: var(--muted); }
@@ -272,7 +282,7 @@ function standings() {
   if (!L || !L.teams.length) return;
   const cut = DATA.season <= 2014 ? 4 : 5;
   const me = L.teams.find((t) => t.id === "OB");
-  const when = DATA.finished ? "최종" : `${fmtDate(L.as_of)} 기준`;
+  const when = DATA.finished ? "정규시즌 최종" : `${fmtDate(L.as_of)} 기준`;
   const gb = (v) => !v ? "-" : (Number.isInteger(v) ? v : v.toFixed(1));
   const rows = L.teams.map((t, i) => `<tr class="${t.id === "OB" ? "me" : ""} ${i === cut - 1 ? "cut" : ""}" title="${esc(`최근 5경기 ${t.last5 || "-"} · ${t.streak || ""}`)}">
     <td>${t.rank}</td><td class="l">${esc(t.name)}</td><td>${t.w}</td><td>${t.l}</td><td>${t.d}</td><td>${rate(t.pct)}</td><td>${gb(t.gb)}</td></tr>`).join("");
@@ -291,7 +301,8 @@ function standings() {
 function tabs() {
   const stages = Object.entries(DATA.stages);
   $("#stageTabs").innerHTML = stages.map(([k, s]) => `<button data-s="${k}" class="${k === stage ? "on" : ""}">${s.label}</button>`).join("");
-  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["players", "선수"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"]]
+  $("#stageTabs").hidden = view === "history";  // 역대 기록은 시즌·경기 구분과 상관없음
+  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["players", "선수"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"], ["history", "역대 기록"]]
     .map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}</button>`).join("");
   document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; delete pagers.games; render(); });
   document.querySelectorAll("#viewTabs button").forEach((b) => b.onclick = () => { view = b.dataset.v; render(); });
@@ -494,6 +505,35 @@ function leaders(s) {
   return cards ? `<h3 class="grp">팀 내 1위 <span class="muted">${regular ? `타율·OPS 규정타석 ${minPa}, ERA 규정이닝 ${g}` : ""}</span></h3><div class="leads">${cards}</div>` : "";
 }
 
+// ── 역대 기록 ── 시즌별 팀 성적과 2008년 이후 한 시즌 개인 기록 순위
+const seasonHref = (s) => s === DATA.seasons[0] ? "index.html" : `${s}.html`;
+
+function historyView() {
+  const H = DATA.history;
+  if (!H) return `<div class="empty">기록 없음</div>`;
+  const diff = (n) => `<span class="${n > 0 ? "pos" : n < 0 ? "neg" : ""}">${n > 0 ? "+" : ""}${n}</span>`;
+  const seasonRows = H.seasons.slice().reverse().map((r) => `<tr class="${r.post === "우승" ? "champ" : ""}">
+    <td class="l"><a href="${seasonHref(r.season)}">${r.season}</a>${r.season === DATA.season ? ' <span class="muted">(현재 페이지)</span>' : ""}</td>
+    <td>${r.rank ? `${r.rank}위` : "-"}</td><td>${r.g}</td><td>${r.w}</td><td>${r.l}</td><td>${r.d}</td><td>${rate(r.pct)}</td>
+    <td>${r.rs}</td><td>${r.ra}</td><td>${diff(r.rs - r.ra)}</td><td class="l post">${r.post ? esc(r.post) : '<span class="muted">-</span>'}</td></tr>`).join("");
+  const fmt = (f, v) => f === "avg" ? rate(v) : f === "era" ? rate(v, 2) : v;
+  const cards = H.records.map((c) => `<div class="rec"><div class="rk">${esc(c.label)}</div><ol>${c.rows.map((r) =>
+    `<li><a href="${seasonHref(r.season)}#p=${r.pid}">${esc(r.name)}</a> <span class="muted">${r.season}</span><b>${fmt(c.fmt, r.value)}</b></li>`).join("")}</ol></div>`).join("");
+  return `<div class="sec">
+    <h3>시즌별 성적</h3><p class="note">정규시즌 기준 · 시즌을 누르면 그 시즌 페이지로 이동</p>
+    <div class="scroll"><table><thead><tr><th class="l">시즌</th><th>순위</th><th>경기</th><th>승</th><th>패</th><th>무</th><th>승률</th><th>득점</th><th>실점</th><th>득실</th><th class="l">포스트시즌</th></tr></thead>
+    <tbody>${seasonRows}</tbody></table></div>
+    <h3>한 시즌 개인 기록 (${H.seasons[0].season}~)</h3>
+    <p class="note">두산 소속 정규시즌 기록 · 타율·OPS는 규정타석, ERA는 규정이닝 이상 · 이름을 누르면 그 시즌 경기별 기록</p>
+    <div class="recs">${cards}</div></div>`;
+}
+
+// 다른 시즌 페이지에서 '시즌.html#p=선수ID'로 넘어오면 그 선수 기록 창을 바로 연다
+function openFromHash() {
+  const m = location.hash.match(/^#p=(\w+)$/);
+  if (m && finals.some((g) => g.bat.some((b) => b.pid === m[1]) || g.pit.some((p) => p.pid === m[1]))) playerLog(m[1]);
+}
+
 // 선수 창 맨 위 프로필
 function profileHeader(pid, name) {
   const p = DATA.players[pid];
@@ -551,7 +591,8 @@ function playerLog(pid) {
 
 function render() {
   tabs();
-  $("#view").innerHTML = view === "games" ? gamesView() : view === "team" ? teamView() : view === "players" ? playersView() : statsView(view);
+  $("#view").innerHTML = view === "games" ? gamesView() : view === "team" ? teamView() : view === "players" ? playersView()
+    : view === "history" ? historyView() : statsView(view);
   document.querySelectorAll("th.sort").forEach((th) => th.onclick = () => {
     const st = sortState[view];
     sortState[view] = [th.dataset.k, st[0] === th.dataset.k ? -st[1] : (th.dataset.k === "name" ? 1 : -1)];
@@ -571,7 +612,10 @@ document.addEventListener("click", (e) => {
   const tr = t.closest("tr.game");
   if (tr) toggleBox(tr);
 });
-header(); upcoming(); standings(); render();
+header(); upcoming(); standings(); render(); openFromHash();
+window.addEventListener("hashchange", openFromHash);
+// 창을 닫으면 주소의 #p=… 를 지워, 같은 링크를 다시 눌러도 열리게 한다
+$("#dlg").addEventListener("close", () => { if (location.hash) history.replaceState(null, "", location.pathname + location.search); });
 $("#foot").textContent = `데이터 출처: 네이버 스포츠 · 경기 ${finals.length}개 기록됨`;
 </script>
 </body>
