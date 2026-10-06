@@ -71,7 +71,24 @@ def history(conn, all_seasons: list[int]) -> dict:
     return {"seasons": rows, "records": stats.season_records(conn, [r["season"] for r in rows])}
 
 
-def build_data(conn, season: int, all_seasons: list[int], hist: dict) -> dict:
+def player_index(conn, all_seasons: list[int]) -> dict:
+    """선수 검색용: 두산에서 뛴 모든 선수의 이름, 뛴 시즌, 최근 시즌 포지션. {선수ID: {"n", "s": [시즌...], "p"}}"""
+    idx = {}
+    for s in sorted(all_seasons):
+        pos = stats.positions(conn, s)
+        for pid, name in conn.execute("""
+                SELECT x.player_id, MAX(x.player_name) FROM (
+                    SELECT game_id, player_id, player_name, team_code FROM batting
+                    UNION ALL SELECT game_id, player_id, player_name, team_code FROM pitching) x
+                JOIN games g USING (game_id) WHERE x.team_code=? AND g.season=? GROUP BY x.player_id""", (TEAM_CODE, s)):
+            e = idx.setdefault(pid, {"n": name, "s": [], "p": None})
+            e["s"].append(s)
+            e["n"] = name
+            e["p"] = pos.get(pid) or e["p"]
+    return idx
+
+
+def build_data(conn, season: int, all_seasons: list[int], shared: dict) -> dict:
     stages = {}
     for key, label in STAGE_LABELS:
         rec = stats.team_record(conn, season, key)
@@ -101,7 +118,7 @@ def build_data(conn, season: int, all_seasons: list[int], hist: dict) -> dict:
         "league": league.table(season),  # 왼쪽 순위표 (리그 전체 팀, 정규시즌 기준)
         # 다음 경기 미리보기 (진행 중 시즌 페이지에만)
         "previews": (db.get_meta(conn, "previews") or {}) if season == all_seasons[0] else {},
-        "history": hist,
+        **shared,  # 역대 기록(history), 선수 검색(index) — 모든 시즌 페이지에 같은 내용
     }
 
 
@@ -143,8 +160,8 @@ def seasons(conn) -> list[int]:
         "SELECT DISTINCT season FROM games WHERE status='FINAL' ORDER BY season DESC")]
 
 
-def render(conn, season: int, out_path: Path, all_seasons: list[int], hist: dict) -> Path:
-    data = build_data(conn, season, all_seasons, hist)
+def render(conn, season: int, out_path: Path, all_seasons: list[int], shared: dict) -> Path:
+    data = build_data(conn, season, all_seasons, shared)
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     html = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", payload)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -155,9 +172,10 @@ def render(conn, season: int, out_path: Path, all_seasons: list[int], hist: dict
 def render_all(conn, site_dir: Path) -> list[int]:
     """시즌마다 <시즌>.html을 만들고, 최신 시즌은 index.html로도 저장한다."""
     all_seasons = seasons(conn)
-    hist = history(conn, all_seasons)  # 모든 페이지에 같은 내용이라 한 번만 계산
+    # 모든 페이지에 같은 내용이라 한 번만 계산
+    shared = {"history": history(conn, all_seasons), "index": player_index(conn, all_seasons)}
     for s in all_seasons:
-        render(conn, s, site_dir / f"{s}.html", all_seasons, hist)
+        render(conn, s, site_dir / f"{s}.html", all_seasons, shared)
     if all_seasons:
         shutil.copyfile(site_dir / f"{all_seasons[0]}.html", site_dir / "index.html")
     return all_seasons

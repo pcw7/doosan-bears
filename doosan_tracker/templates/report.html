@@ -42,6 +42,22 @@ h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
 #seasonSel { font: inherit; color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .35);
   border-radius: 8px; padding: 0 4px; cursor: pointer; }
 #seasonSel option { color: #1b1d29; background: #fff; }
+.hrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.search { position: relative; }
+#search { width: 220px; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .35);
+  background: rgba(255, 255, 255, .12); color: #fff; font: inherit; }
+#search::placeholder { color: #b9bbd6; }
+#search:focus { outline: none; background: rgba(255, 255, 255, .2); }
+#searchResults { position: absolute; right: 0; top: calc(100% + 6px); width: min(380px, 92vw); max-height: 60vh; overflow: auto;
+  z-index: 20; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .25); padding: 4px; }
+.sr { padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+.sr:hover { background: var(--hover); }
+.srn { font-weight: 700; color: var(--accent); text-decoration: none; }
+.srs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.srs a { font-size: 11px; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); text-decoration: none; }
+.srs a:hover { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 600px) { .search, #search { width: 100%; } #searchResults { left: 0; width: 100%; } }
 .sub { color: #b9bbd6; font-size: 13px; }
 .summary { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 18px; align-items: flex-end; }
 .stat .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -213,7 +229,9 @@ function header() {
     ? `<select id="seasonSel" aria-label="시즌 선택">${DATA.seasons.map((s) => `<option value="${s}" ${s === DATA.season ? "selected" : ""}>${s}</option>`).join("")}</select>`
     : DATA.season;
   $("#hdr").innerHTML = `
-    <h1>${esc(DATA.team)} ${seasonPicker} 시즌 기록</h1>
+    <div class="hrow"><h1>${esc(DATA.team)} ${seasonPicker} 시즌 기록</h1>
+      <div class="search"><input id="search" type="search" placeholder="선수 검색 (${DATA.seasons.at(-1)}~)" autocomplete="off" aria-label="선수 검색">
+      <div id="searchResults" hidden></div></div></div>
     <div class="sub">마지막 동기화 ${esc((DATA.lastSync || "").replace("T", " "))} · 리포트 생성 ${esc(DATA.generatedAt)}</div>
     <div class="summary">
       ${r ? `<div class="stat"><div class="v">${r.w}승 ${r.l}패 ${r.d}무</div><div class="k">정규시즌 (${r.g}경기)</div></div>
@@ -226,6 +244,42 @@ function header() {
     </div>`;
   const sel = $("#seasonSel");
   if (sel) sel.onchange = () => { location.href = +sel.value === latest ? "index.html" : `${sel.value}.html`; };
+  setupSearch();
+}
+
+// 선수 검색: 모든 시즌의 두산 선수 중 이름에 검색어가 들어간 선수. 이름 → 마지막 시즌, 연도 → 그 시즌 기록 창
+function setupSearch() {
+  const box = $("#search"), out = $("#searchResults");
+  const all = Object.entries(DATA.index || {});
+  const ranges = (ss) => {  // [2008, 2009, 2010, 2015] → "2008–2010, 2015"
+    const parts = [];
+    let a = ss[0], b = ss[0];
+    for (const s of [...ss.slice(1), null]) {
+      if (s === b + 1) { b = s; continue; }
+      parts.push(a === b ? `${a}` : `${a}–${b}`);
+      a = b = s;
+    }
+    return parts.join(", ");
+  };
+  const show = () => {
+    const q = box.value.trim();
+    if (!q) { out.hidden = true; return; }
+    const hits = all.filter(([, p]) => p.n.includes(q))
+      .sort((x, y) => (y[1].s.at(-1) - x[1].s.at(-1)) || x[1].n.localeCompare(y[1].n, "ko")).slice(0, 12);
+    out.innerHTML = hits.length ? hits.map(([pid, p]) => `<div class="sr">
+        <a class="srn" href="${seasonHref(p.s.at(-1))}#p=${pid}">${esc(p.n)}</a> <span class="muted">${esc(p.p || "")} · ${ranges(p.s)}</span>
+        <div class="srs">${p.s.slice().reverse().map((s) => `<a href="${seasonHref(s)}#p=${pid}">${s}</a>`).join("")}</div></div>`).join("")
+      : `<div class="sr muted">'${esc(q)}' 선수가 없습니다</div>`;
+    out.hidden = false;
+  };
+  box.addEventListener("input", show);
+  box.addEventListener("focus", show);
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { const a = out.querySelector("a.srn"); if (a) { out.hidden = true; location.href = a.href; } }
+    if (e.key === "Escape") { out.hidden = true; box.blur(); }
+  });
+  out.addEventListener("click", (e) => { if (e.target.closest("a")) out.hidden = true; });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".search")) out.hidden = true; });
 }
 
 // 포스트시즌 성적: 한국시리즈 4승이면 우승, 끝난 시즌이면 마지막 라운드에서 탈락(한국시리즈는 준우승)
