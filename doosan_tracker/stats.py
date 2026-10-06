@@ -40,7 +40,8 @@ def batting(conn, season: int, stage: str, team: str = TEAM_CODE) -> list[dict]:
 def pitching(conn, season: int, stage: str, team: str = TEAM_CODE) -> list[dict]:
     rows = conn.execute("""
         SELECT p.player_id, MAX(p.player_name) name, COUNT(*) g, SUM(is_starter) gs,
-               SUM(decision='W') w, SUM(decision='L') l, SUM(decision='S') sv, SUM(decision='H') hld,
+               -- decision이 NULL(결정 없음)이어도 0이 되도록 '=' 대신 IS 사용
+               SUM(decision IS 'W') w, SUM(decision IS 'L') l, SUM(decision IS 'S') sv, SUM(decision IS 'H') hld,
                SUM(outs) outs, SUM(bf) bf, SUM(p.h) h, SUM(p.r) r, SUM(er) er, SUM(bb) bb,
                SUM(hbp) hbp, SUM(so) so, SUM(p.hr) hr, SUM(pitches) pitches
         FROM pitching p JOIN games g USING (game_id)
