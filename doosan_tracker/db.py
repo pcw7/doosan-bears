@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS batting (
     pa INTEGER, ab INTEGER, r INTEGER, h INTEGER, b2 INTEGER, b3 INTEGER, hr INTEGER,
     rbi INTEGER, bb INTEGER, hbp INTEGER, so INTEGER, sb INTEGER, sf INTEGER, sh INTEGER, gidp INTEGER,
     pa_results  TEXT,                        -- 타석 결과 (예: '좌2 3땅 중안 삼진')
+    season_avg  TEXT,                        -- 박스스코어에 실린 공식 시즌 타율 (받은 시점 기준, 다른 팀 기록 포함)
     PRIMARY KEY (game_id, player_id)
 );
 
@@ -62,6 +63,8 @@ CREATE TABLE IF NOT EXISTS pitching (
     outs INTEGER, ip TEXT, bf INTEGER, ab INTEGER, h INTEGER, r INTEGER, er INTEGER,
     bb INTEGER, hbp INTEGER, so INTEGER, hr INTEGER, pitches INTEGER,
     decision    TEXT,                        -- W / L / S / H
+    -- 박스스코어에 실린 공식 시즌 기록 (받은 시점 기준, 다른 팀 기록 포함)
+    season_era TEXT, season_w INTEGER, season_l INTEGER, season_s INTEGER, season_g INTEGER,
     PRIMARY KEY (game_id, player_id)
 );
 
@@ -76,7 +79,7 @@ CREATE INDEX IF NOT EXISTS idx_pitching_player ON pitching(player_id);
 """
 
 
-SCHEMA_VERSION = 2  # 스키마를 바꾸면 올린다 → 기존 DB를 지우고 data/games 원본에서 다시 만든다
+SCHEMA_VERSION = 3  # 스키마를 바꾸면 올린다 → 기존 DB를 지우고 data/games 원본에서 다시 만든다
 
 
 def connect(path: Path) -> sqlite3.Connection:

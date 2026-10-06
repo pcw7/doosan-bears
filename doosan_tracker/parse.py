@@ -142,6 +142,7 @@ def batting_row(game_id: str, team_code: str, seq: int, b: dict) -> dict | None:
         "sh": sh,
         "gidp": kinds.count("GIDP"),
         "pa_results": " ".join(results),
+        "season_avg": b.get("hra"),
     }
     row["pa"] = row["ab"] + row["bb"] + hbp + sf + sh + kinds.count("INT")
     parsed_hits = sum(kinds.count(k) for k in ("1B", "2B", "3B", "HR"))
@@ -175,6 +176,11 @@ def pitching_row(game_id: str, team_code: str, seq: int, p: dict, decisions: dic
         "hr": p.get("hr", 0),
         "pitches": p.get("bf", 0),  # 네이버 응답의 bf 필드는 투구수
         "decision": decisions.get(pid) or DECISIONS_KO.get(p.get("wls") or ""),
+        "season_era": p.get("era"),
+        "season_w": p.get("w"),
+        "season_l": p.get("l"),
+        "season_s": p.get("s"),
+        "season_g": p.get("gameCount"),
     }
 
 

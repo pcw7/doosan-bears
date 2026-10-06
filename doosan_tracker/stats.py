@@ -1,6 +1,7 @@
 """시즌 누적 기록 집계 (DB에 저장된 경기별 기록을 합산)."""
 import json
 from collections import defaultdict
+from decimal import ROUND_HALF_UP, Decimal
 
 from .config import TEAM_CODE
 
@@ -199,3 +200,50 @@ def team(conn, season: int, stage: str, team: str = TEAM_CODE) -> dict:
 
     return {"batting": bat, "pitching": pit, "splits": splits, "comebacks": comebacks,
             "opponents": opponents, "months": months}
+
+
+# ── 이적 선수 판별 ──────────────────────────────────────
+
+def _avg_str(h: int, ab: int) -> str:
+    """공식 기록과 같은 형식('0.234', 반올림)의 타율 문자열."""
+    if not ab:
+        return "0.000"
+    return str((Decimal(h) / Decimal(ab)).quantize(Decimal("0.001"), ROUND_HALF_UP))
+
+
+def transfers(conn, season: int, team: str = TEAM_CODE) -> dict:
+    """정규시즌 두산 기록을 박스스코어의 공식 시즌 기록과 비교해, 두산 밖에서 뛴 기록이 있는 선수를 찾는다.
+
+    공식 기록은 박스스코어를 받은 시점 기준이라 그 경기가 아직 반영되기 전 값일 수도 있다.
+    그래서 타자는 공식 타율이 '마지막 경기 포함'과 '제외' 두 값 모두와 다를 때,
+    투수는 공식 등판 수가 두산 등판 수보다 많을 때만 이적으로 본다.
+    """
+    p = {"team": team, "season": season, "stage": "regular"}
+    order = "ORDER BY g.game_date, g.start_time, g.game_id"
+
+    bat_cum = {}
+    for r in conn.execute(f"""
+            SELECT b.player_id, b.h, b.ab, b.season_avg FROM batting b JOIN games g USING (game_id)
+            WHERE b.team_code=:team AND {FINAL_GAMES} {order}""", p):
+        h, ab, _, _ = bat_cum.get(r["player_id"], (0, 0, None, None))
+        bat_cum[r["player_id"]] = (h + r["h"], ab + r["ab"], _avg_str(h, ab), r["season_avg"])
+    batting = {pid: {"avg": float(official)}
+               for pid, (h, ab, prev_avg, official) in bat_cum.items()
+               if official and official not in (_avg_str(h, ab), prev_avg)}
+
+    pit_cum = {}
+    for r in conn.execute(f"""
+            SELECT p.player_id, p.season_era, p.season_w, p.season_l, p.season_s, p.season_g
+            FROM pitching p JOIN games g USING (game_id)
+            WHERE p.team_code=:team AND {FINAL_GAMES} {order}""", p):
+        pit_cum[r["player_id"]] = (pit_cum.get(r["player_id"], (0, None))[0] + 1, dict(r))
+    pitching = {}
+    for pid, (n, last) in pit_cum.items():
+        if (last["season_g"] or 0) > n:
+            try:
+                era = float(last["season_era"])
+            except (TypeError, ValueError):
+                era = None
+            pitching[pid] = {"g": last["season_g"], "w": last["season_w"], "l": last["season_l"],
+                             "sv": last["season_s"], "era": era}
+    return {"batting": batting, "pitching": pitching}

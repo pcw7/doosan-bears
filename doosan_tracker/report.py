@@ -60,6 +60,13 @@ def build_data(conn, season: int) -> dict:
                 "pitching": stats.pitching(conn, season, key),
                 "team": stats.team(conn, season, key),
             }
+    # 시즌 중 다른 팀에서 뛴 선수: 정규시즌 기록에 공식 시즌 기록을 붙여 화면에서 '이적'으로 표시
+    if "regular" in stages:
+        moved = stats.transfers(conn, season)
+        for kind in ("batting", "pitching"):
+            for row in stages["regular"][kind]:
+                if row["player_id"] in moved[kind]:
+                    row["official"] = moved[kind][row["player_id"]]
     return {
         "team": TEAM_NAME, "season": season,
         "generatedAt": datetime.now().strftime("%Y-%m-%d %H:%M"),

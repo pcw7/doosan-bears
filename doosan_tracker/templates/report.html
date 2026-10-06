@@ -76,6 +76,13 @@ tr.box > td { padding: 0; background: var(--hover); }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 0 28px; }
 .grid2 > div { min-width: 0; }
 .pos { color: var(--win); font-weight: 600; } .neg { color: var(--loss); font-weight: 600; }
+.tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--muted); border-radius: 4px;
+  color: var(--muted); font-size: 11px; font-weight: 600; line-height: 16px; vertical-align: 1px; cursor: help; }
+.notice { border: 1px solid var(--line); background: var(--hover); border-radius: 8px; padding: 10px 12px; margin-bottom: 4px; }
+.notice .nt { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.notice .nt .tag { margin: 0 4px 0 0; }
+.nrow { display: grid; grid-template-columns: 110px 1fr; font-size: 13px; line-height: 1.9; }
+.nrow > span:first-child { color: var(--muted); }
 .filters { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
 dialog { border: none; border-radius: 12px; padding: 0; width: min(920px, 96vw); max-height: 88vh;
   background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
@@ -218,7 +225,7 @@ function statsView(kind) {
   const label = kind === "batting" ? `규정타석(${minPa}) 이상만` : `규정이닝(${g}) 이상만`;
   return `<div class="filters"><label><input type="checkbox" id="qual" ${qualifiedOnly ? "checked" : ""}> ${label}</label><span>${rows.length}명 · 열 제목을 누르면 정렬</span></div>
     <div class="scroll"><table><thead><tr>${cols.map(([k, l, t]) => `<th class="sort ${t === "l" ? "l" : ""} ${k === key ? (dir > 0 ? "asc" : "desc") : ""}" data-k="${k}">${l}</th>`).join("")}</tr></thead><tbody>
-    ${rows.map((r) => `<tr>${cols.map((c) => c[0] === "name" ? `<td class="l"><span class="name" data-pid="${r.player_id}">${esc(r.name)}</span></td>` : `<td>${fmt(r, c)}</td>`).join("")}</tr>`).join("")}
+    ${rows.map((r) => `<tr>${cols.map((c) => c[0] === "name" ? `<td class="l"><span class="name" data-pid="${r.player_id}">${esc(r.name)}</span>${r.official ? `<span class="tag" title="시즌 중 다른 팀에서 뛴 기록이 있음 · 이 표는 두산 소속 기록">이적</span>` : ""}</td>` : `<td>${fmt(r, c)}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div>`;
 }
 
@@ -252,6 +259,22 @@ function teamView() {
   </div>`;
 }
 
+// 시즌 중 다른 팀에서 뛴 선수: 두산 기록과 공식 시즌 기록을 나란히 보여준다
+function transferNotice(pid) {
+  const reg = DATA.stages.regular;
+  if (!reg) return "";
+  const b = reg.batting.find((r) => r.player_id === pid && r.official);
+  const p = reg.pitching.find((r) => r.player_id === pid && r.official);
+  if (!b && !p) return "";
+  const row = (label, text) => `<div class="nrow"><span>${label}</span><span>${text}</span></div>`;
+  let rows = "";
+  if (b) rows += row("두산 기록", `${b.g}경기 ${b.ab}타수 ${b.h}안타 · 타율 <b>${rate(b.avg)}</b>`)
+    + row("시즌 전체(공식)", `타율 <b>${rate(b.official.avg)}</b>`);
+  if (p) rows += row("두산 기록", `${p.g}경기 ${p.w}승 ${p.l}패 ${p.sv}세 · ERA <b>${rate(p.era, 2)}</b>`)
+    + row("시즌 전체(공식)", `${p.official.g}경기 ${p.official.w}승 ${p.official.l}패 ${p.official.sv}세 · ERA <b>${rate(p.official.era, 2)}</b>`);
+  return `<div class="notice"><div class="nt"><span class="tag">이적</span> 시즌 중 다른 팀에서 뛴 기록이 있는 선수입니다. 이 페이지의 기록은 두산 소속 경기만 합친 값입니다.</div>${rows}</div>`;
+}
+
 function playerLog(pid) {
   const bat = [], pit = [];
   let name = "";
@@ -270,7 +293,7 @@ function playerLog(pid) {
       ${realBat.reverse().map(([g, b]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${opp(g)} <span class="res ${g.result}">${RES[g.result]}</span></td><td class="l">${esc(b.pos)}</td><td>${b.ab}</td><td>${b.r}</td><td>${b.h}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.bb}</td><td>${b.so}</td><td class="pa">${esc(b.res)}</td></tr>`).join("")}</tbody></table></div>`;
   }
   $("#dlgTitle").textContent = `${name} — ${DATA.season} 경기별 기록`;
-  $("#dlgBody").innerHTML = html || `<div class="empty">기록 없음</div>`;
+  $("#dlgBody").innerHTML = transferNotice(pid) + (html || `<div class="empty">기록 없음</div>`);
   $("#dlg").showModal();
 }
 
