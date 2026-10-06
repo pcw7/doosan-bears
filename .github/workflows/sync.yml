@@ -22,7 +22,7 @@ env:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # ubuntu-latest는 2026-10-19부터 26.04로 바뀌므로 고정
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
