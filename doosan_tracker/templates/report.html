@@ -168,7 +168,7 @@ function tabs() {
   $("#stageTabs").innerHTML = stages.map(([k, s]) => `<button data-s="${k}" class="${k === stage ? "on" : ""}">${s.label}</button>`).join("");
   $("#viewTabs").innerHTML = [["games", "경기 결과"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"]]
     .map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}</button>`).join("");
-  document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; gamesShown = PAGE; render(); });
+  document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; delete pagers.games; render(); });
   document.querySelectorAll("#viewTabs button").forEach((b) => b.onclick = () => { view = b.dataset.v; render(); });
 }
 
@@ -193,8 +193,29 @@ function boxScore(g) {
   return `<div class="boxin">${line}${bat}${pit}${notes}</div>`;
 }
 
-const PAGE = 20;        // 경기 결과를 한 번에 보여줄 개수
-let gamesShown = PAGE;
+// ── 더보기 목록 ── 처음 PAGE개만 보여주고, 버튼을 누르면 아래에 PAGE개씩 이어 붙인다.
+// 다시 그리지 않고 이어 붙이므로 펼쳐 둔 박스스코어와 스크롤 위치가 유지된다.
+const PAGE = 20;
+const pagers = {};      // 목록 id → { rows: 행 HTML 배열, shown: 보여준 개수 }
+const moreLabel = (left) => `더보기 <span class="muted">· ${left}경기 남음</span>`;
+
+// keep=true면 같은 id로 이전에 펼쳐 둔 개수를 유지한다 (탭을 오갔다 돌아올 때)
+function paged(id, rows, keep = false) {
+  const shown = Math.min(keep && pagers[id] ? pagers[id].shown : PAGE, rows.length);
+  pagers[id] = { rows, shown };
+  const left = rows.length - shown;
+  return [`<tbody id="${id}">${rows.slice(0, shown).join("")}</tbody>`,
+          left > 0 ? `<button class="more" data-more="${id}">${moreLabel(left)}</button>` : ""];
+}
+
+function showMore(id) {
+  const p = pagers[id];
+  document.getElementById(id).insertAdjacentHTML("beforeend", p.rows.slice(p.shown, p.shown + PAGE).join(""));
+  p.shown = Math.min(p.shown + PAGE, p.rows.length);
+  const btn = document.querySelector(`[data-more="${id}"]`);
+  const left = p.rows.length - p.shown;
+  if (left > 0) btn.innerHTML = moreLabel(left); else btn.remove();
+}
 
 const gameList = () => DATA.games.filter((g) => g.stage === stage && (g.status === "FINAL" || g.status === "CANCELLED")).reverse();
 const gameRow = (g) => g.status === "CANCELLED"
@@ -202,24 +223,12 @@ const gameRow = (g) => g.status === "CANCELLED"
   : `<tr class="game" data-id="${g.id}"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td>
      <td><b>${g.ts}</b> : ${g.os}</td><td><span class="res ${g.result}">${RES[g.result]}</span></td>
      <td class="l">${esc(g.wp || "")}</td><td class="l">${esc(g.lp || "")}</td><td class="l">${esc(g.sp || "")}</td><td class="l">${esc(g.starter || "")}</td></tr>`;
-const moreLabel = (left) => `더보기 <span class="muted">· ${left}경기 남음</span>`;
-
 function gamesView() {
   const list = gameList();
   if (!list.length) return `<div class="empty">기록된 경기가 없습니다</div>`;
-  const left = list.length - gamesShown;
+  const [body, more] = paged("games", list.map(gameRow), true);
   return `<div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">구장</th><th>스코어</th><th>결과</th><th class="l">승리투수</th><th class="l">패전투수</th><th class="l">세이브</th><th class="l">선발</th></tr></thead>
-    <tbody id="gameRows">${list.slice(0, gamesShown).map(gameRow).join("")}</tbody></table></div>
-    ${left > 0 ? `<button class="more" id="moreGames">${moreLabel(left)}</button>` : ""}`;
-}
-
-// 다시 그리지 않고 아래에 이어 붙여서, 펼쳐 둔 박스스코어와 스크롤 위치를 유지한다
-function showMoreGames() {
-  const list = gameList();
-  $("#gameRows").insertAdjacentHTML("beforeend", list.slice(gamesShown, gamesShown + PAGE).map(gameRow).join(""));
-  gamesShown = Math.min(gamesShown + PAGE, list.length);
-  const left = list.length - gamesShown;
-  if (left > 0) $("#moreGames").innerHTML = moreLabel(left); else $("#moreGames").remove();
+    ${body}</table></div>${more}`;
 }
 
 function toggleBox(tr) {
@@ -309,15 +318,16 @@ function playerLog(pid) {
     const b = g.bat.find((x) => x.pid === pid); if (b) { bat.push([g, b]); name = b.name; }
     const p = g.pit.find((x) => x.pid === pid); if (p) { pit.push([g, p]); name = p.name; }
   }
+  const when = (g) => `<td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${opp(g)} <span class="res ${g.result}">${RES[g.result]}</span></td>`;
   let html = "";
   if (pit.length) {
-    html += `<h3>투구 기록 (${pit.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th>결과</th><th>이닝</th><th>피안타</th><th>실점</th><th>자책</th><th>볼넷</th><th>삼진</th><th>투구수</th></tr></thead><tbody>
-      ${pit.reverse().map(([g, p]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${opp(g)} <span class="res ${g.result}">${RES[g.result]}</span></td><td>${DEC[p.dec] || (p.gs ? "선발" : "")}</td><td>${esc(p.ip)}</td><td>${p.h}</td><td>${p.r}</td><td>${p.er}</td><td>${p.bb}</td><td>${p.so}</td><td>${p.np}</td></tr>`).join("")}</tbody></table></div>`;
+    const [body, more] = paged("log-pit", pit.reverse().map(([g, p]) => `<tr>${when(g)}<td>${DEC[p.dec] || (p.gs ? "선발" : "")}</td><td>${esc(p.ip)}</td><td>${p.h}</td><td>${p.r}</td><td>${p.er}</td><td>${p.bb}</td><td>${p.so}</td><td>${p.np}</td></tr>`));
+    html += `<h3>투구 기록 (${pit.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th>결과</th><th>이닝</th><th>피안타</th><th>실점</th><th>자책</th><th>볼넷</th><th>삼진</th><th>투구수</th></tr></thead>${body}</table></div>${more}`;
   }
   const realBat = bat.filter(([, b]) => b.pa > 0 || b.pos !== "투");
   if (realBat.length) {
-    html += `<h3>타격 기록 (${realBat.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">위치</th><th>타수</th><th>득점</th><th>안타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th class="l">타석 결과</th></tr></thead><tbody>
-      ${realBat.reverse().map(([g, b]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${opp(g)} <span class="res ${g.result}">${RES[g.result]}</span></td><td class="l">${esc(b.pos)}</td><td>${b.ab}</td><td>${b.r}</td><td>${b.h}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.bb}</td><td>${b.so}</td><td class="pa">${esc(b.res)}</td></tr>`).join("")}</tbody></table></div>`;
+    const [body, more] = paged("log-bat", realBat.reverse().map(([g, b]) => `<tr>${when(g)}<td class="l">${esc(b.pos)}</td><td>${b.ab}</td><td>${b.r}</td><td>${b.h}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.bb}</td><td>${b.so}</td><td class="pa">${esc(b.res)}</td></tr>`));
+    html += `<h3>타격 기록 (${realBat.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">위치</th><th>타수</th><th>득점</th><th>안타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th class="l">타석 결과</th></tr></thead>${body}</table></div>${more}`;
   }
   $("#dlgTitle").textContent = `${name} — ${DATA.season} 경기별 기록`;
   $("#dlgBody").innerHTML = transferNotice(pid) + (html || `<div class="empty">기록 없음</div>`);
@@ -339,7 +349,8 @@ function render() {
 document.addEventListener("click", (e) => {
   const t = e.target;
   if (t.classList.contains("name")) return playerLog(t.dataset.pid);
-  if (t.closest("#moreGames")) return showMoreGames();
+  const more = t.closest("[data-more]");
+  if (more) return showMore(more.dataset.more);
   const tr = t.closest("tr.game");
   if (tr) toggleBox(tr);
 });
