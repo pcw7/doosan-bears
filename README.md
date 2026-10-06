@@ -2,19 +2,20 @@
 
 두산 경기가 끝날 때마다 경기 결과와 선수별 기록(타격·투구)을 자동으로 모아 웹 대시보드로 보여줍니다.
 GitHub Actions가 매시간 새 경기를 확인해 수집하고, 결과를 GitHub Pages에 배포합니다.
-Python 표준 라이브러리만 사용하므로 따로 설치할 패키지가 없습니다.
+필요한 패키지는 원본 암호화용 `cryptography` 하나입니다 (`pip install -r requirements.txt`).
 
 ## 동작 방식
 
 ```
 GitHub Actions (한국시간 17:00~01:00 매시 정각)
   → 네이버 스포츠에서 두산 일정 확인
-  → 새로 끝난 경기의 박스스코어를 data/games/에 저장하고 커밋
+  → 새로 끝난 경기의 박스스코어를 암호화해 data/games/에 저장하고 커밋
   → 대시보드(HTML)와 CSV 생성
   → GitHub Pages에 배포
 ```
 
-- 저장소에 들어가는 데이터는 `data/games/<시즌>/<경기ID>.json` 뿐입니다. 경기마다 파일 하나이고, 한 번 저장하면 바뀌지 않습니다.
+- 저장소에 들어가는 데이터는 `data/games/<시즌>/<경기ID>.json.enc` 뿐입니다. 경기마다 파일 하나이고, 한 번 저장하면 바뀌지 않습니다.
+- 이 파일들은 암호화되어 있어 키 없이는 열 수 없습니다. 네이버 응답 원본을 공개 저장소에 그대로 배포하지 않기 위해서입니다.
 - SQLite DB(`data/doosan.db`), 대시보드, CSV는 이 파일들로 실행할 때마다 다시 만들어집니다. 그래서 커밋하지 않습니다.
 - 경기가 없는 시간에 실행되면 커밋 없이 대시보드만 갱신합니다. 다음 경기, 진행 중 표시, 마지막 동기화 시각이 여기에 해당합니다.
 
@@ -23,7 +24,7 @@ GitHub Actions (한국시간 17:00~01:00 매시 정각)
 ```
 doosan_tracker/
   naver.py      네이버 스포츠 API 호출 (일정, 박스스코어)
-  archive.py    경기별 원본 JSON 보관 (data/games)
+  archive.py    경기별 원본 JSON 암호화 보관 (data/games)
   parse.py      원본 → 경기/타자/투수 행 변환 (2루타·3루타·사구·희생타는 타석 결과에서 계산)
   db.py         SQLite 스키마와 저장
   sync.py       원본에서 DB 복원 → 새로 끝난 경기만 수집
@@ -33,9 +34,20 @@ doosan_tracker/
 .github/workflows/sync.yml   자동 수집 + Pages 배포
 ```
 
+## 암호 키
+
+| 위치 | 용도 |
+|---|---|
+| 프로젝트 폴더의 `archive.key` | 내 PC에서 실행할 때 사용 (git에 올라가지 않음) |
+| GitHub 저장소 Settings → Secrets → `DOOSAN_ARCHIVE_KEY` | Actions에서 사용 |
+
+**키를 잃어버리면 저장된 원본을 복구할 수 없습니다.** `archive.key`의 내용을 비밀번호 관리자 등 안전한 곳에 따로 보관하세요.
+다른 PC에서 쓰려면 저장소를 받은 뒤 같은 키를 `archive.key` 파일로 넣으면 됩니다.
+
 ## 내 PC에서 실행하기
 
 ```powershell
+pip install -r requirements.txt     # 처음 한 번
 git pull                            # Actions가 수집한 최신 경기 받기
 python -m doosan_tracker report     # reports/index.html, reports/csv/ 생성
 python -m doosan_tracker status     # DB 현황

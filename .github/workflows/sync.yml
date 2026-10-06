@@ -33,9 +33,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - run: pip install -r requirements.txt
+
       # 일부 경기 수집에 실패해도(종료 코드 1) 받은 경기는 커밋·배포하고, 실행 결과는 실패로 표시해 알림을 받는다
       - name: 경기 기록 수집 + 리포트 생성
         run: python -m doosan_tracker sync
+        env:
+          DOOSAN_ARCHIVE_KEY: ${{ secrets.DOOSAN_ARCHIVE_KEY }}   # 원본 암호 키 (저장소 Settings → Secrets)
 
       - name: 새 경기 원본 커밋
         if: ${{ !cancelled() }}

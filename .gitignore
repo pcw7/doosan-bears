@@ -1,4 +1,8 @@
-# data/games/ 의 원본 JSON만 저장하고, 나머지는 실행할 때마다 다시 만들어지는 파일
+# 원본 암호 키 — 절대 커밋하지 않음
+archive.key
+
+# data/games/ 의 암호화된 원본만 저장하고, 나머지는 실행할 때마다 다시 만들어지는 파일
+data/games/**/*.json
 data/doosan.db
 reports/
 logs/

@@ -50,8 +50,9 @@ def restore(conn) -> int:
     known = {r["game_id"] for r in conn.execute(
         f"SELECT game_id FROM games WHERE status IN {DONE}")}
     n = 0
-    for game_id, doc in archive.read_all():
+    for game_id, path in archive.entries():
         if game_id not in known:
+            doc = archive.read(path)
             store(conn, doc["schedule"], doc["record"], doc["fetched_at"])
             n += 1
     if n:
