@@ -58,6 +58,7 @@ def build_data(conn, season: int) -> dict:
                 "label": label, "record": rec,
                 "batting": stats.batting(conn, season, key),
                 "pitching": stats.pitching(conn, season, key),
+                "team": stats.team(conn, season, key),
             }
     return {
         "team": TEAM_NAME, "season": season,

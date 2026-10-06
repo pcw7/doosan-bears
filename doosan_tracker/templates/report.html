@@ -70,6 +70,12 @@ tr.box > td { padding: 0; background: var(--hover); }
 .notes { font-size: 12px; color: var(--muted); line-height: 1.7; }
 .notes b { color: var(--text); font-weight: 600; }
 .pa { font-size: 12px; color: var(--muted); text-align: left; }
+.sec h3 { font-size: 14px; margin: 24px 0 4px; }
+.sec > h3:first-child { margin-top: 4px; }
+.note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 0 28px; }
+.grid2 > div { min-width: 0; }
+.pos { color: var(--win); font-weight: 600; } .neg { color: var(--loss); font-weight: 600; }
 .filters { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
 dialog { border: none; border-radius: 12px; padding: 0; width: min(920px, 96vw); max-height: 88vh;
   background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
@@ -151,7 +157,7 @@ function upcoming() {
 function tabs() {
   const stages = Object.entries(DATA.stages);
   $("#stageTabs").innerHTML = stages.map(([k, s]) => `<button data-s="${k}" class="${k === stage ? "on" : ""}">${s.label}</button>`).join("");
-  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["batting", "타자 기록"], ["pitching", "투수 기록"]]
+  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"]]
     .map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}</button>`).join("");
   document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; render(); });
   document.querySelectorAll("#viewTabs button").forEach((b) => b.onclick = () => { view = b.dataset.v; render(); });
@@ -217,6 +223,36 @@ function statsView(kind) {
     </tbody></table></div>`;
 }
 
+function teamView() {
+  const t = DATA.stages[stage] && DATA.stages[stage].team;
+  if (!t) return `<div class="empty">기록 없음</div>`;
+  const dash = (v) => v == null ? "-" : v;
+  const pct = (v) => v == null ? "-" : `<span class="${v > .5 ? "pos" : v < .5 ? "neg" : ""}">${rate(v)}</span>`;
+  const diff = (n) => `<span class="${n > 0 ? "pos" : n < 0 ? "neg" : ""}">${n > 0 ? "+" : ""}${n}</span>`;
+  const table = (head, rows) => `<div class="scroll"><table><thead><tr>${head.map((h, i) => `<th class="${i === 0 ? "l" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${rows.map((cells) => `<tr>${cells.map((c, i) => `<td class="${i === 0 ? "l" : ""}">${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  const rec = (r) => [r.g, r.w, r.l, r.d, pct(r.pct), r.rs, r.ra, diff(r.rs - r.ra)];
+  const REC = ["경기", "승", "패", "무", "승률", "득점", "실점", "득실"];
+
+  const bat = table(["구분", "경기", "득점", "경기당", "안타", "2루타", "3루타", "홈런", "볼넷", "사구", "삼진", "도루", "병살", "실책", "타율", "출루율", "장타율", "OPS"],
+    t.batting.map((b) => [`<b>${esc(b.label)}</b>`, b.g, b.r, rate(b.rpg, 2), b.h, b.b2, b.b3, b.hr, b.bb, b.hbp, b.so, b.sb, b.gidp, b.e, rate(b.avg), rate(b.obp), rate(b.slg), rate(b.ops)]));
+  const pit = table(["구분", "등판", "승", "패", "세", "홀", "이닝", "평균 이닝", "피안타", "피홈런", "볼넷", "삼진", "자책", "ERA", "WHIP", "K/9", "BB/9", "QS"],
+    t.pitching.map((p) => [`<b>${esc(p.label)}</b>`, p.g, p.w, p.l, p.sv, p.hld, esc(p.ip), esc(dash(p.ip_avg)), p.h, p.hr, p.bb, p.so, p.er, rate(p.era, 2), rate(p.whip, 2), rate(p.k9, 2), rate(p.bb9, 2), dash(p.qs)]));
+  const splits = table(["구분", ...REC], t.splits.map((s) => [esc(s.label), ...rec(s)]));
+  const group = (rows) => table(["", ...REC, "팀 타율", "팀 ERA"], rows.map((r) => [`<b>${esc(r.label)}</b>`, ...rec(r), rate(r.avg), rate(r.era, 2)]));
+
+  return `<div class="sec">
+    <h3>팀 타격 · 수비</h3>
+    <p class="note">상대 팀 = 두산 경기에서 상대 팀이 기록한 성적 · 실책은 각 팀 수비 실책</p>${bat}
+    <h3>투수진</h3>
+    <p class="note">QS = 선발 6이닝 이상 3자책 이하 · 전체 자책은 공식 규칙에 따른 팀 자책점이라 선발+불펜 합보다 적을 수 있음</p>${pit}
+    <div class="grid2">
+      <div><h3>상황별 성적</h3><p class="note">역전승 ${t.comebacks.wins} · 역전패 ${t.comebacks.losses}</p>${splits}</div>
+      <div><h3>상대 팀별</h3><p class="note">승률 순</p>${group(t.opponents)}</div>
+    </div>
+    <h3>월별</h3>${group(t.months)}
+  </div>`;
+}
+
 function playerLog(pid) {
   const bat = [], pit = [];
   let name = "";
@@ -241,7 +277,7 @@ function playerLog(pid) {
 
 function render() {
   tabs();
-  $("#view").innerHTML = view === "games" ? gamesView() : statsView(view);
+  $("#view").innerHTML = view === "games" ? gamesView() : view === "team" ? teamView() : statsView(view);
   document.querySelectorAll("tr.game").forEach((tr) => tr.onclick = (e) => {
     if (e.target.classList.contains("name")) return;
     const next = tr.nextElementSibling;

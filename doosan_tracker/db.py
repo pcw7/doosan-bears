@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS games (
     opponent_hits    INTEGER,
     opponent_errors  INTEGER,
     opponent_walks   INTEGER,
+    team_er          INTEGER,                -- 팀 자책점 (공식 규칙상 투수 개인 자책점 합보다 적을 수 있음)
     line_score       TEXT,                   -- JSON {"team": [...], "opponent": [...]}
     team_starter     TEXT,
     opponent_starter TEXT,
@@ -75,10 +76,17 @@ CREATE INDEX IF NOT EXISTS idx_pitching_player ON pitching(player_id);
 """
 
 
+SCHEMA_VERSION = 2  # 스키마를 바꾸면 올린다 → 기존 DB를 지우고 data/games 원본에서 다시 만든다
+
+
 def connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
+    if conn.execute("PRAGMA user_version").fetchone()[0] != SCHEMA_VERSION:
+        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        conn.executescript("".join(f"DROP TABLE {t};" for t in tables))
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
     return conn

@@ -11,7 +11,7 @@ from datetime import date
 
 from . import db, export, report
 from .config import CSV_DIR, DB_PATH, LOG_PATH, REPORT_PATH
-from .sync import sync
+from .sync import restore, sync
 
 
 def setup_logging() -> None:
@@ -70,6 +70,7 @@ def main(argv=None) -> int:
             if not args.no_report:
                 publish(conn, None)
             return 1 if stats["failed"] else 0
+        restore(conn)  # DB가 없거나 스키마가 바뀌어 비었으면 data/games 원본에서 채움
         if args.cmd == "report":
             publish(conn, args.season)
         elif args.cmd == "status":
