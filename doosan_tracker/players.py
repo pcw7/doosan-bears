@@ -5,15 +5,14 @@ data/players/<시즌>.json.enc 에 암호화해 저장한다.
   "numbers":  {선수ID: {"no": "7", "date": "2026-10-05"}},   # 그 시즌 두산에서 단 등번호 (가장 최근 경기 기준)
   "lineup_games": [경기ID, ...],                               # 등번호를 확인하려고 문자중계를 받은 경기
   "profiles": {선수ID: {...}},                                 # 사진·생년월일·키/몸무게·투타·출신·드래프트·연봉·WAR
-  "profiles_date": "2026-10-06"                                # 프로필을 마지막으로 받은 날 (진행 중 시즌은 하루 한 번 갱신)
 }
 등번호는 경기마다 문자중계(경기당 약 140KB)를 받아야 알 수 있어, 최근 경기부터 보면서 번호를 모르는 선수가
-나온 경기만 받는다 (시즌당 15경기 안팎). 프로필은 시즌이 아니라 현재 기준이라, 지난 시즌에는 처음 한 번만 받는다.
+나온 경기만 받는다 (시즌당 15~30경기). 진행 중 시즌은 새 경기마다 받아 번호 변경도 반영하고,
+그 경기에 나온 선수의 프로필(WAR 등)만 다시 받는다. 프로필은 현재 기준이라 지난 시즌은 처음 한 번만 받는다.
 """
 import json
 import logging
 import time
-from datetime import date
 
 from . import archive, naver
 from .config import PLAYERS_DIR, REQUEST_DELAY, TEAM_CODE
@@ -72,9 +71,11 @@ def _profile(raw: dict) -> dict:
 
 
 def update(conn, season: int, current: bool) -> bool:
-    """그 시즌 두산 출전 선수의 등번호·프로필을 채운다. 바뀐 게 있으면 저장하고 True."""
+    """그 시즌 두산 출전 선수의 등번호·프로필을 채운다. 내용이 바뀌었을 때만 저장하고 True.
+    (저장할 때마다 암호문이 달라져 git 커밋이 생기므로, 바뀐 게 없으면 파일을 건드리지 않는다)"""
     data = load(season)
-    changed = False
+    before = json.dumps(data, sort_keys=True, ensure_ascii=False)
+    refresh = set()  # 새 경기에 나온 선수 → 프로필(WAR 등)을 다시 받는다
     games = _season_games(conn, season)
     all_players = set().union(*(g[3] for g in games)) if games else set()
 
@@ -92,35 +93,34 @@ def update(conn, season: int, current: bool) -> bool:
             log.warning("문자중계 라인업 수집 실패 %s: %s", gid, e)
             continue
         data["lineup_games"].append(gid)
+        appeared = {str(p.get("pcode")) for p in (lineup.get("batter") or []) + (lineup.get("pitcher") or [])}
         for p in (lineup.get("batter") or []) + (lineup.get("pitcher") or []):
             pid, no = str(p.get("pcode") or ""), str(p.get("backnum") or "").strip()
             old = data["numbers"].get(pid)
             if pid and no and (not old or old["date"] <= gdate):
                 data["numbers"][pid] = {"no": no, "date": gdate}
-        unknown -= {str(p.get("pcode")) for p in (lineup.get("batter") or []) + (lineup.get("pitcher") or [])}
-        changed = True
+        unknown -= appeared
+        if new_game:
+            refresh |= appeared
         time.sleep(REQUEST_DELAY)
         if not unknown and not current:
             break
 
-    # 2) 프로필: 처음 보는 선수, 진행 중 시즌은 하루 한 번 전원 갱신 (WAR·연봉 등이 바뀜)
-    today = date.today().isoformat()
-    refresh = current and data.get("profiles_date") != today
+    # 2) 프로필: 처음 보는 선수, 그리고 진행 중 시즌의 새 경기에 나온 선수 (경기를 뛰면 WAR 등이 바뀜)
+    data.pop("profiles_date", None)  # 예전 형식(하루 한 번 전원 갱신)의 흔적
     for pid in sorted(all_players):
-        if pid in data["profiles"] and not refresh:
+        if pid in data["profiles"] and pid not in refresh:
             continue
         try:
             data["profiles"][pid] = _profile(naver.fetch_player(season, pid))
         except naver.ApiError as e:
             log.warning("선수 정보 수집 실패 %s %s: %s", season, pid, e)
             continue
-        changed = True
         time.sleep(0.2)
-    if refresh:
-        data["profiles_date"] = today
 
-    if changed:
-        archive.save_json(path_for(season), data)
-        log.info("%d 선수 정보: %d명 (등번호 %d명, 문자중계 %d경기)", season, len(all_players),
-                 len(set(data["numbers"]) & all_players), len(data["lineup_games"]))
-    return changed
+    if json.dumps(data, sort_keys=True, ensure_ascii=False) == before:
+        return False
+    archive.save_json(path_for(season), data)
+    log.info("%d 선수 정보: %d명 (등번호 %d명, 문자중계 %d경기)", season, len(all_players),
+             len(set(data["numbers"]) & all_players), len(data["lineup_games"]))
+    return True

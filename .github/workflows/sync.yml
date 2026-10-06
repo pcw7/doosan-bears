@@ -50,17 +50,19 @@ jobs:
         env:
           DOOSAN_ARCHIVE_KEY: ${{ secrets.DOOSAN_ARCHIVE_KEY }}   # 원본 암호 키 (저장소 Settings → Secrets)
 
-      - name: 새 경기 원본 커밋
+      - name: 새 경기 원본·선수 정보 커밋
         if: ${{ !cancelled() }}
         run: |
-          git add data/games
+          git add data/games data/players
           if git diff --cached --quiet; then
-            echo "새로 끝난 경기 없음"
+            echo "바뀐 데이터 없음"
           else
             # 내 계정(noreply 이메일)으로 커밋 → 자동 커밋도 잔디에 기록됨
             git config user.name "pcw7"
             git config user.email "58602643+pcw7@users.noreply.github.com"
-            git commit -m "기록 추가: $(git diff --cached --name-only | wc -l)경기 ($(date +'%Y-%m-%d %H:%M'))"
+            n=$(git diff --cached --name-only -- data/games | wc -l)
+            if [ "$n" -gt 0 ]; then msg="기록 추가: ${n}경기"; else msg="선수 정보 갱신"; fi
+            git commit -m "$msg ($(date +'%Y-%m-%d %H:%M'))"
             git pull --rebase
             git push
           fi
