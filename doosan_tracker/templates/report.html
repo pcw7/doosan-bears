@@ -124,6 +124,12 @@ tr.box > td { padding: 0; background: var(--hover); }
 .ph { position: relative; width: 84px; height: 84px; margin: 0 auto 8px; border-radius: 50%; overflow: hidden;
   background: var(--hover); display: grid; place-items: center; color: var(--muted); font-size: 28px; font-weight: 700; }
 .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.leads { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-bottom: 4px; }
+.pcard.lead { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; }
+.lead .lk { font-size: 12px; color: var(--muted); }
+.lead .nm { font-size: 13px; }
+.lead .lv { font-size: 18px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.ph.sm { width: 48px; height: 48px; margin: 0; font-size: 18px; flex: none; }
 .ph.big { width: 112px; height: 112px; margin: 0; border-radius: 12px; font-size: 40px; flex: none; }
 .prof { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
 .prof .pt { font-size: 18px; margin-bottom: 6px; }
@@ -451,9 +457,41 @@ function playersView() {
       <div class="ps">${esc([p.pos, p.type].filter(Boolean).join(" · "))}</div><div class="st">${line}</div></div>`;
   };
   const total = Object.values(groups).reduce((n, g) => n + g.length, 0);
-  return `<p class="note">${DATA.season} ${esc(s.label)} 출전 선수 ${total}명 · 등번호는 그 시즌 기준, 사진·프로필은 현재 기준 · 카드를 누르면 경기별 기록</p>`
+  return leaders(s)
+    + `<p class="note">${DATA.season} ${esc(s.label)} 출전 선수 ${total}명 · 등번호는 그 시즌 기준, 사진·프로필은 현재 기준 · 카드를 누르면 경기별 기록</p>`
     + GROUP_ORDER.filter((g) => groups[g]).map((g) => `<h3 class="grp">${g} <span class="muted">${groups[g].length}</span></h3>
       <div class="pgrid">${groups[g].sort((a, b) => num(a) - num(b)).map(card).join("")}</div>`).join("");
+}
+
+// 팀 내 1위. 타율·OPS·ERA는 규정타석/규정이닝(정규시즌: 경기수×3.1타석, 경기수 이닝) 이상만
+function leaders(s) {
+  const g = s.record.g;
+  const regular = stage === "regular";
+  const minPa = regular ? Math.floor(g * 3.1) : g, minOuts = regular ? g * 3 : g;
+  const cats = [
+    ["타율", s.batting.filter((r) => r.pa >= minPa), "avg", 1, (v) => rate(v)],
+    ["홈런", s.batting, "hr", 1, (v) => v],
+    ["타점", s.batting, "rbi", 1, (v) => v],
+    ["도루", s.batting, "sb", 1, (v) => v],
+    ["OPS", s.batting.filter((r) => r.pa >= minPa), "ops", 1, (v) => rate(v)],
+    ["ERA", s.pitching.filter((r) => r.outs >= minOuts), "era", -1, (v) => rate(v, 2)],
+    ["승", s.pitching, "w", 1, (v) => v],
+    ["세이브", s.pitching, "sv", 1, (v) => v],
+    ["홀드", s.pitching, "hld", 1, (v) => v],
+    ["탈삼진", s.pitching, "so", 1, (v) => v],
+  ];
+  const cards = cats.map(([label, rows, key, dir, fmt]) => {
+    const vals = rows.filter((r) => r[key] != null);
+    if (!vals.length) return "";
+    const best = dir > 0 ? Math.max(...vals.map((r) => r[key])) : Math.min(...vals.map((r) => r[key]));
+    if (dir > 0 && !best) return "";  // 모두 0이면 생략 (예: 시범경기 세이브)
+    const top = vals.filter((r) => r[key] === best);
+    const r = top[0];
+    return `<div class="lead pcard" data-pid="${r.player_id}">${photo(r.player_id, r.name, "sm")}
+      <div><div class="lk">${label}</div><div class="nm">${esc(r.name)}${top.length > 1 ? ` <span class="muted">외 ${top.length - 1}명</span>` : ""}</div>
+      <div class="lv">${fmt(best)}</div></div></div>`;
+  }).join("");
+  return cards ? `<h3 class="grp">팀 내 1위 <span class="muted">${regular ? `타율·OPS 규정타석 ${minPa}, ERA 규정이닝 ${g}` : ""}</span></h3><div class="leads">${cards}</div>` : "";
 }
 
 // 선수 창 맨 위 프로필
