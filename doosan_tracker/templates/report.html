@@ -56,6 +56,16 @@ h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
 .up { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 .up .d { color: var(--muted); font-size: 12px; }
 .up .o { font-weight: 600; margin-top: 2px; }
+.up.big { grid-column: 1 / -1; }
+.matchup { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin: 10px 0 8px;
+  padding: 10px 12px; background: var(--hover); border-radius: 8px; font-size: 13px; line-height: 1.7; }
+.matchup .sp:last-child { text-align: right; }
+.vsx { font-weight: 800; color: var(--muted); }
+.pvrow { display: flex; gap: 12px; font-size: 13px; padding: 3px 0; flex-wrap: wrap; align-items: center; }
+.pvrow .k { color: var(--muted); min-width: 92px; }
+.pvrow .gap { display: inline-block; width: 10px; }
+.strip.sm { display: inline-flex; vertical-align: middle; }
+.strip.sm span { width: 18px; height: 18px; font-size: 10px; }
 .live { color: var(--red); font-weight: 700; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .tabs button { border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 6px 12px;
@@ -221,10 +231,33 @@ function upcoming() {
   const list = DATA.games.filter((g) => (g.status === "SCHEDULED" || g.status === "LIVE") && g.date >= today).slice(0, 4);
   if (!list.length) return;
   $("#upcomingCard").hidden = false;
-  $("#upcoming").innerHTML = list.map((g) => `
+  const simple = (g) => `
     <div class="up"><div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${esc(g.round)}</div>
     <div class="o">${opp(g)} ${g.status === "LIVE" ? '<span class="live">● 진행 중</span>' : ""}</div>
-    <div class="d">선발: ${esc(g.starter || "미정")} vs ${esc(g.oppStarter || "미정")}</div></div>`).join("");
+    <div class="d">선발: ${esc(g.starter || "미정")} vs ${esc(g.oppStarter || "미정")}</div></div>`;
+  const pv = (DATA.previews || {})[list[0].id];
+  $("#upcoming").innerHTML = (pv && list[0].status === "SCHEDULED" ? previewCard(list[0], pv) : simple(list[0]))
+    + list.slice(1).map(simple).join("");
+}
+
+// 다음 경기 미리보기: 선발 매치업(시즌·상대 전적), 시즌 맞대결, 양 팀 최근 5경기, 순위
+function previewCard(g, pv) {
+  const starter = (s, team, vsName) => s
+    ? `<div class="sp"><div><span class="pno">${esc(s.no || "")}</span> <b>${esc(s.name)}</b> <span class="muted">${esc(team)}</span></div>
+       <div>${s.season.g ?? 0}경기 ${s.season.w ?? 0}승 ${s.season.l ?? 0}패 · ERA <b>${esc(s.season.era ?? "-")}</b></div>
+       <div class="muted">${esc(vsName)}전 ${s.vs.g ?? 0}경기 ${s.vs.w ?? 0}승 ${s.vs.l ?? 0}패 · ERA ${esc(s.vs.era ?? "-")}</div></div>`
+    : `<div class="sp muted">${esc(team)} 선발 미정</div>`;
+  const strip = (r) => `<span class="strip sm">${r.map((x) => `<span class="${x}">${RES[x]}</span>`).join("")}</span>`;
+  const rank = (s) => s && s.rank ? `${s.rank}위 (${s.w}승 ${s.l}패 ${s.d}무)` : "";
+  const v = pv.vs || {};
+  return `<div class="up big">
+    <div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${esc(g.round)}</div>
+    <div class="o">${opp(g)}</div>
+    <div class="matchup">${starter(pv.team_starter, "두산", g.opp)}<div class="vsx">VS</div>${starter(pv.opp_starter, g.opp, "두산")}</div>
+    <div class="pvrow"><span class="k">시즌 상대 전적</span><span><b>${v.w ?? 0}승 ${v.l ?? 0}패 ${v.d ?? 0}무</b> <span class="muted">(두산 기준)</span></span></div>
+    <div class="pvrow"><span class="k">최근 5경기</span><span>두산 ${strip(pv.team_recent || [])} <span class="gap"></span> ${esc(g.opp)} ${strip(pv.opp_recent || [])}</span></div>
+    <div class="pvrow"><span class="k">순위</span><span>두산 ${rank(pv.team_standing)} · ${esc(g.opp)} ${rank(pv.opp_standing)}</span></div>
+  </div>`;
 }
 
 // 왼쪽 리그 순위표. 점선 위가 포스트시즌 진출권 (2014년까지 상위 4팀, 2015년부터 5팀)

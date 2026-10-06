@@ -82,6 +82,8 @@ def build_data(conn, season: int, all_seasons: list[int]) -> dict:
         "stages": stages, "games": _games(conn, season),
         "players": _players(conn, season, current=season == all_seasons[0]),
         "league": league.load(season),  # 왼쪽 순위표 (리그 전체 팀)
+        # 다음 경기 미리보기 (진행 중 시즌 페이지에만)
+        "previews": (db.get_meta(conn, "previews") or {}) if season == all_seasons[0] else {},
     }
 
 

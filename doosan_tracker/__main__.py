@@ -10,7 +10,7 @@ import logging
 import sys
 from datetime import date
 
-from . import db, export, league, players, report
+from . import db, export, league, players, preview, report
 from .config import CSV_DIR, DB_PATH, LOG_PATH, SITE_DIR
 from .sync import restore, sync
 
@@ -83,6 +83,10 @@ def main(argv=None) -> int:
         if args.cmd == "sync":
             stats = sync(conn, args.start, args.end, args.force)
             update_info(conn, all_seasons=False)
+            try:
+                preview.update(conn)
+            except Exception:
+                logging.exception("다음 경기 미리보기 갱신 실패")
             if not args.no_report:
                 publish(conn)
             return 1 if stats["failed"] else 0
