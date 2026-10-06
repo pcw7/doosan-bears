@@ -57,6 +57,12 @@ tbody tr:hover { background: var(--hover); }
 .name:hover { text-decoration: underline; }
 .res { display: inline-block; width: 22px; text-align: center; border-radius: 4px; color: #fff; font-weight: 700; font-size: 12px; }
 .muted { color: var(--muted); }
+.ha { display: inline-block; width: 2.9em; margin-right: 6px; border: 1px solid var(--accent); border-radius: 4px;
+  font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; vertical-align: 1px; }
+.ha.H { background: var(--accent); color: #fff; }
+.ha.A { color: var(--accent); }
+@media (prefers-color-scheme: dark) { .ha.H { color: #0f1020; } }
+tr.muted .ha { opacity: .55; }
 tr.game { cursor: pointer; }
 tr.box > td { padding: 0; background: var(--hover); }
 .boxin { padding: 12px; display: grid; gap: 12px; }
@@ -98,7 +104,9 @@ const rate = (v, d = 3) => v == null ? "-" : (d === 3 ? v.toFixed(3).replace(/^0
 const DEC = { W: "승", L: "패", S: "세", H: "홀" };
 const RES = { W: "승", L: "패", D: "무" };
 const fmtDate = (d) => { const [, m, day] = d.split("-"); const w = "일월화수목금토"[new Date(d + "T00:00").getDay()]; return `${+m}/${+day}(${w})`; };
-const vs = (g) => (g.ha === "H" ? "vs " : "@ ") + g.opp;
+const HA = { H: "홈", A: "원정" };
+const vs = (g) => `${g.opp} ${HA[g.ha]}`;  // 툴팁용 텍스트
+const opp = (g) => `<span class="ha ${g.ha}">${HA[g.ha]}</span>${esc(g.opp)}`;
 const finals = DATA.games.filter((g) => g.status === "FINAL");
 let stage = Object.keys(DATA.stages)[0] || "regular";
 let view = "games";
@@ -136,7 +144,7 @@ function upcoming() {
   $("#upcomingCard").hidden = false;
   $("#upcoming").innerHTML = list.map((g) => `
     <div class="up"><div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${esc(g.round)}</div>
-    <div class="o">${esc(vs(g))} ${g.status === "LIVE" ? '<span class="live">● 진행 중</span>' : ""}</div>
+    <div class="o">${opp(g)} ${g.status === "LIVE" ? '<span class="live">● 진행 중</span>' : ""}</div>
     <div class="d">선발: ${esc(g.starter || "미정")} vs ${esc(g.oppStarter || "미정")}</div></div>`).join("");
 }
 
@@ -175,8 +183,8 @@ function gamesView() {
   if (!list.length) return `<div class="empty">기록된 경기가 없습니다</div>`;
   return `<div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">구장</th><th>스코어</th><th>결과</th><th class="l">승리투수</th><th class="l">패전투수</th><th class="l">세이브</th><th class="l">선발</th></tr></thead><tbody>
     ${list.map((g) => g.status === "CANCELLED"
-      ? `<tr class="muted"><td class="l">${fmtDate(g.date)}</td><td class="l">${esc(vs(g))}</td><td class="l">${esc(g.stadium || "")}</td><td colspan="6" class="l">경기 취소</td></tr>`
-      : `<tr class="game" data-id="${g.id}"><td class="l">${fmtDate(g.date)}</td><td class="l">${esc(vs(g))}</td><td class="l">${esc(g.stadium || "")}</td>
+      ? `<tr class="muted"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td><td colspan="6" class="l">경기 취소</td></tr>`
+      : `<tr class="game" data-id="${g.id}"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td>
          <td><b>${g.ts}</b> : ${g.os}</td><td><span class="res ${g.result}">${RES[g.result]}</span></td>
          <td class="l">${esc(g.wp || "")}</td><td class="l">${esc(g.lp || "")}</td><td class="l">${esc(g.sp || "")}</td><td class="l">${esc(g.starter || "")}</td></tr>`).join("")}
     </tbody></table></div>`;
@@ -219,12 +227,12 @@ function playerLog(pid) {
   let html = "";
   if (pit.length) {
     html += `<h3>투구 기록 (${pit.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th>결과</th><th>이닝</th><th>피안타</th><th>실점</th><th>자책</th><th>볼넷</th><th>삼진</th><th>투구수</th></tr></thead><tbody>
-      ${pit.reverse().map(([g, p]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${esc(vs(g))} <span class="res ${g.result}">${RES[g.result]}</span></td><td>${DEC[p.dec] || (p.gs ? "선발" : "")}</td><td>${esc(p.ip)}</td><td>${p.h}</td><td>${p.r}</td><td>${p.er}</td><td>${p.bb}</td><td>${p.so}</td><td>${p.np}</td></tr>`).join("")}</tbody></table></div>`;
+      ${pit.reverse().map(([g, p]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${opp(g)} <span class="res ${g.result}">${RES[g.result]}</span></td><td>${DEC[p.dec] || (p.gs ? "선발" : "")}</td><td>${esc(p.ip)}</td><td>${p.h}</td><td>${p.r}</td><td>${p.er}</td><td>${p.bb}</td><td>${p.so}</td><td>${p.np}</td></tr>`).join("")}</tbody></table></div>`;
   }
   const realBat = bat.filter(([, b]) => b.pa > 0 || b.pos !== "투");
   if (realBat.length) {
     html += `<h3>타격 기록 (${realBat.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">위치</th><th>타수</th><th>득점</th><th>안타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th class="l">타석 결과</th></tr></thead><tbody>
-      ${realBat.reverse().map(([g, b]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${esc(vs(g))} <span class="res ${g.result}">${RES[g.result]}</span></td><td class="l">${esc(b.pos)}</td><td>${b.ab}</td><td>${b.r}</td><td>${b.h}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.bb}</td><td>${b.so}</td><td class="pa">${esc(b.res)}</td></tr>`).join("")}</tbody></table></div>`;
+      ${realBat.reverse().map(([g, b]) => `<tr><td class="l">${fmtDate(g.date)} <span class="muted">${esc(g.round === "정규시즌" ? "" : g.round)}</span></td><td class="l">${opp(g)} <span class="res ${g.result}">${RES[g.result]}</span></td><td class="l">${esc(b.pos)}</td><td>${b.ab}</td><td>${b.r}</td><td>${b.h}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.bb}</td><td>${b.so}</td><td class="pa">${esc(b.res)}</td></tr>`).join("")}</tbody></table></div>`;
   }
   $("#dlgTitle").textContent = `${name} — ${DATA.season} 경기별 기록`;
   $("#dlgBody").innerHTML = html || `<div class="empty">기록 없음</div>`;
