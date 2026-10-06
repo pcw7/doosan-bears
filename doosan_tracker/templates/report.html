@@ -64,6 +64,9 @@ tbody tr:hover { background: var(--hover); }
 @media (prefers-color-scheme: dark) { .ha.H { color: #0f1020; } }
 tr.muted .ha { opacity: .55; }
 tr.game { cursor: pointer; }
+.more { display: block; margin: 14px auto 2px; padding: 8px 22px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--text); font: inherit; cursor: pointer; }
+.more:hover { background: var(--hover); }
 tr.box > td { padding: 0; background: var(--hover); }
 .boxin { padding: 12px; display: grid; gap: 12px; }
 .boxin table { background: var(--card); border-radius: 6px; }
@@ -165,7 +168,7 @@ function tabs() {
   $("#stageTabs").innerHTML = stages.map(([k, s]) => `<button data-s="${k}" class="${k === stage ? "on" : ""}">${s.label}</button>`).join("");
   $("#viewTabs").innerHTML = [["games", "경기 결과"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"]]
     .map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}</button>`).join("");
-  document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; render(); });
+  document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; gamesShown = PAGE; render(); });
   document.querySelectorAll("#viewTabs button").forEach((b) => b.onclick = () => { view = b.dataset.v; render(); });
 }
 
@@ -190,16 +193,40 @@ function boxScore(g) {
   return `<div class="boxin">${line}${bat}${pit}${notes}</div>`;
 }
 
+const PAGE = 20;        // 경기 결과를 한 번에 보여줄 개수
+let gamesShown = PAGE;
+
+const gameList = () => DATA.games.filter((g) => g.stage === stage && (g.status === "FINAL" || g.status === "CANCELLED")).reverse();
+const gameRow = (g) => g.status === "CANCELLED"
+  ? `<tr class="muted"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td><td colspan="6" class="l">경기 취소</td></tr>`
+  : `<tr class="game" data-id="${g.id}"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td>
+     <td><b>${g.ts}</b> : ${g.os}</td><td><span class="res ${g.result}">${RES[g.result]}</span></td>
+     <td class="l">${esc(g.wp || "")}</td><td class="l">${esc(g.lp || "")}</td><td class="l">${esc(g.sp || "")}</td><td class="l">${esc(g.starter || "")}</td></tr>`;
+const moreLabel = (left) => `더보기 <span class="muted">· ${left}경기 남음</span>`;
+
 function gamesView() {
-  const list = DATA.games.filter((g) => g.stage === stage && (g.status === "FINAL" || g.status === "CANCELLED")).reverse();
+  const list = gameList();
   if (!list.length) return `<div class="empty">기록된 경기가 없습니다</div>`;
-  return `<div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">구장</th><th>스코어</th><th>결과</th><th class="l">승리투수</th><th class="l">패전투수</th><th class="l">세이브</th><th class="l">선발</th></tr></thead><tbody>
-    ${list.map((g) => g.status === "CANCELLED"
-      ? `<tr class="muted"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td><td colspan="6" class="l">경기 취소</td></tr>`
-      : `<tr class="game" data-id="${g.id}"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td>
-         <td><b>${g.ts}</b> : ${g.os}</td><td><span class="res ${g.result}">${RES[g.result]}</span></td>
-         <td class="l">${esc(g.wp || "")}</td><td class="l">${esc(g.lp || "")}</td><td class="l">${esc(g.sp || "")}</td><td class="l">${esc(g.starter || "")}</td></tr>`).join("")}
-    </tbody></table></div>`;
+  const left = list.length - gamesShown;
+  return `<div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">구장</th><th>스코어</th><th>결과</th><th class="l">승리투수</th><th class="l">패전투수</th><th class="l">세이브</th><th class="l">선발</th></tr></thead>
+    <tbody id="gameRows">${list.slice(0, gamesShown).map(gameRow).join("")}</tbody></table></div>
+    ${left > 0 ? `<button class="more" id="moreGames">${moreLabel(left)}</button>` : ""}`;
+}
+
+// 다시 그리지 않고 아래에 이어 붙여서, 펼쳐 둔 박스스코어와 스크롤 위치를 유지한다
+function showMoreGames() {
+  const list = gameList();
+  $("#gameRows").insertAdjacentHTML("beforeend", list.slice(gamesShown, gamesShown + PAGE).map(gameRow).join(""));
+  gamesShown = Math.min(gamesShown + PAGE, list.length);
+  const left = list.length - gamesShown;
+  if (left > 0) $("#moreGames").innerHTML = moreLabel(left); else $("#moreGames").remove();
+}
+
+function toggleBox(tr) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains("box")) { next.remove(); return; }
+  const g = DATA.games.find((x) => x.id === tr.dataset.id);
+  tr.insertAdjacentHTML("afterend", `<tr class="box"><td colspan="9">${boxScore(g)}</td></tr>`);
 }
 
 const BAT_COLS = [["name", "선수", "l"], ["g", "경기"], ["pa", "타석"], ["ab", "타수"], ["r", "득점"], ["h", "안타"], ["b2", "2루타"], ["b3", "3루타"], ["hr", "홈런"], ["rbi", "타점"], ["bb", "볼넷"], ["hbp", "사구"], ["so", "삼진"], ["sb", "도루"], ["avg", "타율", "r3"], ["obp", "출루율", "r3"], ["slg", "장타율", "r3"], ["ops", "OPS", "r3"]];
@@ -300,13 +327,6 @@ function playerLog(pid) {
 function render() {
   tabs();
   $("#view").innerHTML = view === "games" ? gamesView() : view === "team" ? teamView() : statsView(view);
-  document.querySelectorAll("tr.game").forEach((tr) => tr.onclick = (e) => {
-    if (e.target.classList.contains("name")) return;
-    const next = tr.nextElementSibling;
-    if (next && next.classList.contains("box")) { next.remove(); return; }
-    const g = DATA.games.find((x) => x.id === tr.dataset.id);
-    tr.insertAdjacentHTML("afterend", `<tr class="box"><td colspan="9">${boxScore(g)}</td></tr>`);
-  });
   document.querySelectorAll("th.sort").forEach((th) => th.onclick = () => {
     const st = sortState[view];
     sortState[view] = [th.dataset.k, st[0] === th.dataset.k ? -st[1] : (th.dataset.k === "name" ? 1 : -1)];
@@ -316,7 +336,13 @@ function render() {
   const q = $("#qual"); if (q) q.onchange = () => { qualifiedOnly = q.checked; render(); };
 }
 
-document.addEventListener("click", (e) => { if (e.target.classList.contains("name")) playerLog(e.target.dataset.pid); });
+document.addEventListener("click", (e) => {
+  const t = e.target;
+  if (t.classList.contains("name")) return playerLog(t.dataset.pid);
+  if (t.closest("#moreGames")) return showMoreGames();
+  const tr = t.closest("tr.game");
+  if (tr) toggleBox(tr);
+});
 header(); upcoming(); render();
 $("#foot").textContent = `데이터 출처: 네이버 스포츠 · 경기 ${finals.length}개 기록됨`;
 </script>
