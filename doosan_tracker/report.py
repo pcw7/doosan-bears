@@ -1,6 +1,7 @@
 """HTML 대시보드 생성: 데이터를 JSON으로 만들어 templates/report.html에 끼워 넣는다."""
 import json
-from datetime import datetime
+import shutil
+from datetime import date, datetime
 from pathlib import Path
 
 from . import db, stats
@@ -49,7 +50,7 @@ def _games(conn, season: int) -> list[dict]:
     return out
 
 
-def build_data(conn, season: int) -> dict:
+def build_data(conn, season: int, all_seasons: list[int]) -> dict:
     stages = {}
     for key, label in STAGE_LABELS:
         rec = stats.team_record(conn, season, key)
@@ -59,6 +60,7 @@ def build_data(conn, season: int) -> dict:
                 "batting": stats.batting(conn, season, key),
                 "pitching": stats.pitching(conn, season, key),
                 "team": stats.team(conn, season, key),
+                "missing": stats.missing_boxes(conn, season, key),
             }
     # 시즌 중 다른 팀에서 뛴 선수: 정규시즌 기록에 공식 시즌 기록을 붙여 화면에서 '이적'으로 표시
     if "regular" in stages:
@@ -67,17 +69,28 @@ def build_data(conn, season: int) -> dict:
             for row in stages["regular"][kind]:
                 if row["player_id"] in moved[kind]:
                     row["official"] = moved[kind][row["player_id"]]
+    # 남은 경기가 없으면 끝난 시즌 → 화면에 '최종 순위'로 표시
+    remaining = conn.execute("""
+        SELECT COUNT(*) FROM games WHERE season=? AND status IN ('SCHEDULED', 'LIVE', 'SUSPENDED')
+        AND game_date >= ?""", (season, date.today().isoformat())).fetchone()[0]
     return {
-        "team": TEAM_NAME, "season": season,
+        "team": TEAM_NAME, "season": season, "seasons": all_seasons,
         "generatedAt": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "lastSync": db.get_meta(conn, "last_sync"),
-        "standings": db.get_meta(conn, "standings"),
+        "standings": db.get_meta(conn, f"standings:{season}"),
+        "finished": remaining == 0,
         "stages": stages, "games": _games(conn, season),
     }
 
 
-def render(conn, season: int, out_path: Path) -> Path:
-    data = build_data(conn, season)
+def seasons(conn) -> list[int]:
+    """기록이 있는 시즌 목록 (최신순)."""
+    return [r[0] for r in conn.execute(
+        "SELECT DISTINCT season FROM games WHERE status='FINAL' ORDER BY season DESC")]
+
+
+def render(conn, season: int, out_path: Path, all_seasons: list[int]) -> Path:
+    data = build_data(conn, season, all_seasons)
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     html = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", payload)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +98,11 @@ def render(conn, season: int, out_path: Path) -> Path:
     return out_path
 
 
-def latest_season(conn) -> int | None:
-    r = conn.execute("SELECT MAX(season) s FROM games WHERE status='FINAL'").fetchone()
-    return r["s"]
+def render_all(conn, site_dir: Path) -> list[int]:
+    """시즌마다 <시즌>.html을 만들고, 최신 시즌은 index.html로도 저장한다."""
+    all_seasons = seasons(conn)
+    for s in all_seasons:
+        render(conn, s, site_dir / f"{s}.html", all_seasons)
+    if all_seasons:
+        shutil.copyfile(site_dir / f"{all_seasons[0]}.html", site_dir / "index.html")
+    return all_seasons

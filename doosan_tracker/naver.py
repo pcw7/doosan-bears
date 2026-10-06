@@ -56,6 +56,8 @@ def fetch_schedule(start: date, end: date) -> list[dict]:
         })
         games.extend(result.get("games", []))
         cur = chunk_end + timedelta(days=1)
+        if cur <= end:
+            time.sleep(0.2)  # 여러 달을 한꺼번에 받을 때 서버에 부담을 주지 않도록
     return games
 
 

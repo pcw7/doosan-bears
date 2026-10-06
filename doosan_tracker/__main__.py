@@ -10,7 +10,7 @@ import sys
 from datetime import date
 
 from . import db, export, report
-from .config import CSV_DIR, DB_PATH, LOG_PATH, REPORT_PATH
+from .config import CSV_DIR, DB_PATH, LOG_PATH, SITE_DIR
 from .sync import restore, sync
 
 
@@ -25,15 +25,14 @@ def setup_logging() -> None:
                         format="%(asctime)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
 
-def publish(conn, season: int | None) -> None:
-    season = season or report.latest_season(conn)
-    if not season:
+def publish(conn) -> None:
+    seasons = report.render_all(conn, SITE_DIR)
+    if not seasons:
         logging.info("저장된 경기가 없어 리포트를 건너뜁니다")
         return
-    files = export.export_csv(conn, CSV_DIR, season)
-    out = report.render(conn, season, REPORT_PATH)
+    files = export.export_csv(conn, CSV_DIR, seasons)
     logging.info("CSV %d개 → %s", len(files), CSV_DIR)
-    logging.info("리포트 → %s", out)
+    logging.info("리포트 %d개 시즌 (%d~%d) → %s", len(seasons), seasons[-1], seasons[0], SITE_DIR)
 
 
 def status(conn) -> None:
@@ -44,7 +43,9 @@ def status(conn) -> None:
         print(f"{row['season']} {row['stage']:<11} 경기 {row['n']:>3} (종료 {row['final']:>3})  "
               f"{row['w']}승 {row['l']}패 {row['d']}무  마지막 {row['last']}")
     print("마지막 동기화:", db.get_meta(conn, "last_sync"))
-    print("순위:", db.get_meta(conn, "standings"))
+    seasons = report.seasons(conn)
+    if seasons:
+        print(f"{seasons[0]} 순위:", db.get_meta(conn, f"standings:{seasons[0]}"))
 
 
 def main(argv=None) -> int:
@@ -55,8 +56,7 @@ def main(argv=None) -> int:
     s.add_argument("--to", dest="end", type=date.fromisoformat, help="종료일 YYYY-MM-DD")
     s.add_argument("--force", action="store_true", help="이미 저장된 경기도 다시 수집")
     s.add_argument("--no-report", action="store_true", help="CSV/리포트 생성 생략")
-    r = sub.add_parser("report", help="CSV/HTML 리포트만 생성")
-    r.add_argument("--season", type=int)
+    sub.add_parser("report", help="CSV/HTML 리포트만 생성 (모든 시즌)")
     sub.add_parser("status", help="DB 현황")
     args = p.parse_args(argv)
 
@@ -68,11 +68,11 @@ def main(argv=None) -> int:
         if args.cmd == "sync":
             stats = sync(conn, args.start, args.end, args.force)
             if not args.no_report:
-                publish(conn, None)
+                publish(conn)
             return 1 if stats["failed"] else 0
         restore(conn)  # DB가 없거나 스키마가 바뀌어 비었으면 data/games 원본에서 채움
         if args.cmd == "report":
-            publish(conn, args.season)
+            publish(conn)
         elif args.cmd == "status":
             status(conn)
         return 0

@@ -23,6 +23,9 @@ header { background: var(--navy); color: #fff; padding: 28px 16px 22px; border-b
 .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
 header .wrap { padding: 0; }
 h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
+#seasonSel { font: inherit; color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .35);
+  border-radius: 8px; padding: 0 4px; cursor: pointer; }
+#seasonSel option { color: #1b1d29; background: #fff; }
 .sub { color: #b9bbd6; font-size: 13px; }
 .summary { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 18px; align-items: flex-end; }
 .stat .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -76,6 +79,7 @@ tr.box > td { padding: 0; background: var(--hover); }
 .sec h3 { font-size: 14px; margin: 24px 0 4px; }
 .sec > h3:first-child { margin-top: 4px; }
 .note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+.note.warn { color: var(--loss); }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 0 28px; }
 .grid2 > div { min-width: 0; }
 .pos { color: var(--win); font-weight: 600; } .neg { color: var(--loss); font-weight: 600; }
@@ -138,17 +142,38 @@ function header() {
     for (let i = last.length - 1; i >= 0 && last[i].result === t; i--) n++;
     streak = `${n}연${t === "W" ? "승" : "패"}`;
   }
+  const done = DATA.finished;
+  const latest = DATA.seasons[0];
+  const seasonPicker = DATA.seasons.length > 1
+    ? `<select id="seasonSel" aria-label="시즌 선택">${DATA.seasons.map((s) => `<option value="${s}" ${s === DATA.season ? "selected" : ""}>${s}</option>`).join("")}</select>`
+    : DATA.season;
   $("#hdr").innerHTML = `
-    <h1>${esc(DATA.team)} ${DATA.season} 시즌 기록</h1>
+    <h1>${esc(DATA.team)} ${seasonPicker} 시즌 기록</h1>
     <div class="sub">마지막 동기화 ${esc((DATA.lastSync || "").replace("T", " "))} · 리포트 생성 ${esc(DATA.generatedAt)}</div>
     <div class="summary">
       ${r ? `<div class="stat"><div class="v">${r.w}승 ${r.l}패 ${r.d}무</div><div class="k">정규시즌 (${r.g}경기)</div></div>
              <div class="stat"><div class="v">${rate(r.pct)}</div><div class="k">승률</div></div>` : ""}
-      ${st && st.rank ? `<div class="stat"><div class="v">${st.rank}위</div><div class="k">순위 (${esc(st.as_of)} 기준)</div></div>` : ""}
+      ${st && st.rank ? `<div class="stat"><div class="v">${st.rank}위</div><div class="k">${done ? "최종 순위" : `순위 (${fmtDate(st.game_date)} 기준)`}</div></div>` : ""}
+      ${postseason(done)}
       ${r ? `<div class="stat"><div class="v">${r.rs} / ${r.ra}</div><div class="k">득점 / 실점</div></div>` : ""}
-      ${streak ? `<div class="stat"><div class="v">${streak}</div><div class="k">현재 연속</div></div>` : ""}
-      ${recent.length ? `<div class="stat"><div class="strip">${recent.map((g) => `<span class="${g.result}" title="${fmtDate(g.date)} ${esc(vs(g))} ${g.ts}-${g.os}">${RES[g.result]}</span>`).join("")}</div><div class="k">최근 ${recent.length}경기</div></div>` : ""}
+      ${streak ? `<div class="stat"><div class="v">${streak}</div><div class="k">${done ? "시즌 마지막 연속" : "현재 연속"}</div></div>` : ""}
+      ${recent.length ? `<div class="stat"><div class="strip">${recent.map((g) => `<span class="${g.result}" title="${fmtDate(g.date)} ${esc(vs(g))} ${g.ts}-${g.os}">${RES[g.result]}</span>`).join("")}</div><div class="k">${done ? "시즌 마지막" : "최근"} ${recent.length}경기</div></div>` : ""}
     </div>`;
+  const sel = $("#seasonSel");
+  if (sel) sel.onchange = () => { location.href = +sel.value === latest ? "index.html" : `${sel.value}.html`; };
+}
+
+// 포스트시즌 성적: 한국시리즈 4승이면 우승, 끝난 시즌이면 마지막 라운드에서 탈락(한국시리즈는 준우승)
+function postseason(done) {
+  const ps = finals.filter((g) => g.stage === "postseason");
+  if (!ps.length) return "";
+  const w = ps.filter((g) => g.result === "W").length, l = ps.filter((g) => g.result === "L").length;
+  const lastRound = ps[ps.length - 1].round;
+  const ksWins = ps.filter((g) => g.round === "한국시리즈" && g.result === "W").length;
+  const label = ksWins >= 4 ? "한국시리즈 우승"
+    : !done ? `${lastRound} 진행 중`
+    : lastRound === "한국시리즈" ? "한국시리즈 준우승" : `${lastRound} 탈락`;
+  return `<div class="stat"><div class="v">${label}</div><div class="k">포스트시즌 ${w}승 ${l}패</div></div>`;
 }
 
 function upcoming() {
@@ -243,6 +268,15 @@ const PIT_COLS = [["name", "선수", "l"], ["g", "경기"], ["gs", "선발"], ["
 const sortState = { batting: ["pa", -1], pitching: ["outs", -1] };
 let qualifiedOnly = false;
 
+// 네이버에 선수 기록이 없는 경기가 있으면 알려준다 (2011년 투수 기록, 2008년 포스트시즌 등)
+function missNote(kind) {
+  const s = DATA.stages[stage];
+  const miss = s && s.missing ? s.missing[kind] : 0;
+  if (!miss) return "";
+  const who = kind === "batting" ? "타자" : "투수";
+  return `<p class="note warn">ⓘ ${miss === s.record.g ? `이 시즌은 네이버에 ${who} 기록이 없습니다.` : `${s.record.g}경기 중 ${miss}경기는 네이버에 ${who} 기록이 없어 선수 기록 합계에서 빠져 있습니다.`}</p>`;
+}
+
 function statsView(kind) {
   const s = DATA.stages[stage];
   if (!s) return "";
@@ -259,9 +293,9 @@ function statsView(kind) {
   });
   const fmt = (r, [k, , t]) => t === "r3" ? rate(r[k]) : t === "r2" ? rate(r[k], 2) : t === "ip" ? esc(r.ip) : r[k];
   const label = kind === "batting" ? `규정타석(${minPa}) 이상만` : `규정이닝(${g}) 이상만`;
-  return `<div class="filters"><label><input type="checkbox" id="qual" ${qualifiedOnly ? "checked" : ""}> ${label}</label><span>${rows.length}명 · 열 제목을 누르면 정렬</span></div>
+  return `${missNote(kind)}<div class="filters"><label><input type="checkbox" id="qual" ${qualifiedOnly ? "checked" : ""}> ${label}</label><span>${rows.length}명 · 열 제목을 누르면 정렬</span></div>
     <div class="scroll"><table><thead><tr>${cols.map(([k, l, t]) => `<th class="sort ${t === "l" ? "l" : ""} ${k === key ? (dir > 0 ? "asc" : "desc") : ""}" data-k="${k}">${l}</th>`).join("")}</tr></thead><tbody>
-    ${rows.map((r) => `<tr>${cols.map((c) => c[0] === "name" ? `<td class="l"><span class="name" data-pid="${r.player_id}">${esc(r.name)}</span>${r.official ? `<span class="tag" title="시즌 중 다른 팀에서 뛴 기록이 있음 · 이 표는 두산 소속 기록">이적</span>` : ""}</td>` : `<td>${fmt(r, c)}</td>`).join("")}</tr>`).join("")}
+    ${rows.map((r) => `<tr>${cols.map((c) => c[0] === "name" ? `<td class="l"><span class="name" data-pid="${r.player_id}">${esc(r.name)}</span>${r.official ? `<span class="tag" title="공식 시즌 기록에 두산 경기 밖 기록이 포함됨 (시즌 중 이적 등) · 이 표는 두산 경기 기록">이적</span>` : ""}</td>` : `<td>${fmt(r, c)}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div>`;
 }
 
@@ -284,9 +318,9 @@ function teamView() {
 
   return `<div class="sec">
     <h3>팀 타격 · 수비</h3>
-    <p class="note">상대 팀 = 두산 경기에서 상대 팀이 기록한 성적 · 실책은 각 팀 수비 실책</p>${bat}
+    <p class="note">상대 팀 = 두산 경기에서 상대 팀이 기록한 성적 · 실책은 각 팀 수비 실책</p>${missNote("batting")}${bat}
     <h3>투수진</h3>
-    <p class="note">QS = 선발 6이닝 이상 3자책 이하 · 전체 자책은 공식 규칙에 따른 팀 자책점이라 선발+불펜 합보다 적을 수 있음</p>${pit}
+    <p class="note">QS = 선발 6이닝 이상 3자책 이하 · 전체 이닝·자책·ERA는 박스스코어의 팀 합계 기준 (공식 규칙상 팀 자책점은 선발+불펜 합보다 적을 수 있음)</p>${missNote("pitching")}${t.noTeamTotals ? `<p class="note warn">ⓘ ${t.noTeamTotals}경기는 네이버에 팀 투구 합계가 없어 개인 기록 합으로 계산했습니다 (공식 팀 ERA와 0.01~0.02 차이 날 수 있음)</p>` : ""}${pit}
     <div class="grid2">
       <div><h3>상황별 성적</h3><p class="note">역전승 ${t.comebacks.wins} · 역전패 ${t.comebacks.losses}</p>${splits}</div>
       <div><h3>상대 팀별</h3><p class="note">승률 순</p>${group(t.opponents)}</div>
@@ -308,7 +342,7 @@ function transferNotice(pid) {
     + row("시즌 전체(공식)", `타율 <b>${rate(b.official.avg)}</b>`);
   if (p) rows += row("두산 기록", `${p.g}경기 ${p.w}승 ${p.l}패 ${p.sv}세 · ERA <b>${rate(p.era, 2)}</b>`)
     + row("시즌 전체(공식)", `${p.official.g}경기 ${p.official.w}승 ${p.official.l}패 ${p.official.sv}세 · ERA <b>${rate(p.official.era, 2)}</b>`);
-  return `<div class="notice"><div class="nt"><span class="tag">이적</span> 시즌 중 다른 팀에서 뛴 기록이 있는 선수입니다. 이 페이지의 기록은 두산 소속 경기만 합친 값입니다.</div>${rows}</div>`;
+  return `<div class="notice"><div class="nt"><span class="tag">이적</span> 공식 시즌 기록에 두산 경기 밖의 기록이 포함되어 있습니다 (시즌 중 이적 등). 이 페이지의 기록은 두산 경기만 합친 값입니다.</div>${rows}</div>`;
 }
 
 function playerLog(pid) {

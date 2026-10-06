@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS games (
     opponent_errors  INTEGER,
     opponent_walks   INTEGER,
     team_er          INTEGER,                -- 팀 자책점 (공식 규칙상 투수 개인 자책점 합보다 적을 수 있음)
+    team_outs        INTEGER,                -- 팀 투구 아웃 수 (박스스코어 팀 합계, 개인 투수 기록이 빠진 경기도 있음)
     line_score       TEXT,                   -- JSON {"team": [...], "opponent": [...]}
     team_starter     TEXT,
     opponent_starter TEXT,
@@ -79,7 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_pitching_player ON pitching(player_id);
 """
 
 
-SCHEMA_VERSION = 3  # 스키마를 바꾸면 올린다 → 기존 DB를 지우고 data/games 원본에서 다시 만든다
+SCHEMA_VERSION = 5  # 스키마를 바꾸면 올린다 → 기존 DB를 지우고 data/games 원본에서 다시 만든다
 
 
 def connect(path: Path) -> sqlite3.Connection:

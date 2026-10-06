@@ -19,7 +19,7 @@ def default_window(conn, today: date) -> tuple[date, date]:
     return start, today + timedelta(days=LOOKAHEAD_DAYS)
 
 
-def store(conn, schedule: dict, record: dict | None, fetched_at: str) -> dict:
+def store(conn, schedule: dict, record: dict | None) -> dict:
     """종료 경기(record 있음) 또는 취소 경기(record 없음)를 DB에 저장."""
     game = parse.schedule_to_game(schedule, TEAM_CODE)
     if record is None:
@@ -33,14 +33,14 @@ def store(conn, schedule: dict, record: dict | None, fetched_at: str) -> dict:
     game["result"] = "W" if ts > os_ else "L" if ts < os_ else "D"
     db.save_final_game(conn, game, batting, pitching)
 
-    # 순위는 박스스코어를 받은 시점 기준이므로 가장 최근 정규시즌 경기의 값을 쓴다
+    # 박스스코어의 순위는 그 경기 직후 기준 → 시즌별로 가장 마지막 정규시즌 경기의 값을 남긴다 (지난 시즌은 최종 순위)
     if standings and game["stage"] == "regular":
-        prev = db.get_meta(conn, "standings")
+        key = f"standings:{game['season']}"
+        prev = db.get_meta(conn, key)
         if not prev or prev.get("game_date", "") <= game["game_date"]:
-            db.set_meta(conn, "standings", {
+            db.set_meta(conn, key, {
                 "rank": standings.get("rank"), "w": standings.get("w"), "l": standings.get("l"),
-                "d": standings.get("d"), "pct": standings.get("wra"),
-                "as_of": fetched_at[:10], "game_date": game["game_date"],
+                "d": standings.get("d"), "pct": standings.get("wra"), "game_date": game["game_date"],
             })
     return game
 
@@ -53,7 +53,7 @@ def restore(conn) -> int:
     for game_id, path in archive.entries():
         if game_id not in known:
             doc = archive.read(path)
-            store(conn, doc["schedule"], doc["record"], doc["fetched_at"])
+            store(conn, doc["schedule"], doc["record"])
             n += 1
     if n:
         log.info("보관된 원본에서 %d경기 복원", n)
@@ -81,7 +81,7 @@ def sync(conn, start: date | None = None, end: date | None = None, force: bool =
             continue
         if game["status"] == "CANCELLED":
             archive.write(game["season"], game["game_id"], g, None, db.now())
-            store(conn, g, None, db.now())
+            store(conn, g, None)
             stats["pending"] += 1
             continue
         if game["status"] != "FINAL":
@@ -97,9 +97,8 @@ def sync(conn, start: date | None = None, end: date | None = None, force: bool =
             stats["failed"] += 1
             continue
 
-        fetched_at = db.now()
-        archive.write(game["season"], game["game_id"], g, record, fetched_at)
-        game = store(conn, g, record, fetched_at)
+        archive.write(game["season"], game["game_id"], g, record, db.now())
+        game = store(conn, g, record)
         stats["saved"] += 1
         log.info("저장: %s %s %s %d-%d %s",
                  game["game_date"], "vs" if game["home_away"] == "H" else "@",

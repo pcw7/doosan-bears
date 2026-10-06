@@ -34,7 +34,7 @@ def _write(path: Path, header: list[str], rows) -> None:
         w.writerows(rows)
 
 
-def export_csv(conn, out_dir: Path, season: int) -> list[Path]:
+def export_csv(conn, out_dir: Path, seasons: list[int]) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     written = []
     for name, sql in QUERIES.items():
@@ -42,10 +42,11 @@ def export_csv(conn, out_dir: Path, season: int) -> list[Path]:
         path = out_dir / name
         _write(path, [c[0] for c in cur.description], cur.fetchall())
         written.append(path)
-    for kind, fn in (("batting", stats.batting), ("pitching", stats.pitching)):
-        rows = fn(conn, season, "regular")
-        if rows:
-            path = out_dir / f"{kind}_season_{season}.csv"
-            _write(path, list(rows[0]), [list(r.values()) for r in rows])
-            written.append(path)
+    for season in seasons:
+        for kind, fn in (("batting", stats.batting), ("pitching", stats.pitching)):
+            rows = fn(conn, season, "regular")
+            if rows:
+                path = out_dir / f"{kind}_season_{season}.csv"
+                _write(path, list(rows[0]), [list(r.values()) for r in rows])
+                written.append(path)
     return written

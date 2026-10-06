@@ -1,6 +1,8 @@
 """네이버 API 응답 → DB 행(dict) 변환."""
 import json
 import logging
+import re
+from collections import Counter
 
 from .config import STAGES
 
@@ -16,7 +18,9 @@ def game_status(g: dict) -> str:
         return "CANCELLED"
     if g.get("suspended"):
         return "SUSPENDED"
-    return {"RESULT": "FINAL", "STARTED": "LIVE", "BEFORE": "SCHEDULED"}.get(g.get("statusCode"), g.get("statusCode") or "UNKNOWN")
+    # ENDED: 2008년 포스트시즌 등 옛 경기의 종료 상태 (점수·이닝별 점수만 있고 선수 기록은 없음)
+    return {"RESULT": "FINAL", "ENDED": "FINAL", "STARTED": "LIVE", "BEFORE": "SCHEDULED"}.get(
+        g.get("statusCode"), g.get("statusCode") or "UNKNOWN")
 
 
 def schedule_to_game(g: dict, team: str) -> dict:
@@ -132,7 +136,8 @@ def batting_row(game_id: str, team_code: str, seq: int, b: dict) -> dict | None:
         "h": b.get("hit", 0),
         "b2": kinds.count("2B"),
         "b3": kinds.count("3B"),
-        "hr": b.get("hr", 0),
+        # 옛 포스트시즌·시범경기는 홈런 수가 0으로 빠진 경우가 있어 타석 결과('우홈' 등)로 센 값과 큰 쪽을 쓴다
+        "hr": max(b.get("hr", 0), kinds.count("HR")),
         "rbi": b.get("rbi", 0),
         "bb": b.get("bb", 0),
         "hbp": hbp,
@@ -145,10 +150,10 @@ def batting_row(game_id: str, team_code: str, seq: int, b: dict) -> dict | None:
         "season_avg": b.get("hra"),
     }
     row["pa"] = row["ab"] + row["bb"] + hbp + sf + sh + kinds.count("INT")
+    # 타석 결과가 아예 없는 옛 경기(2011년 시범경기 등)는 2루타·사구 등을 셀 수 없을 뿐 다른 기록은 정상이라 경고하지 않는다
     parsed_hits = sum(kinds.count(k) for k in ("1B", "2B", "3B", "HR"))
-    if parsed_hits != row["h"] or kinds.count("HR") != row["hr"]:
-        log.warning("%s %s: 타석 결과 해석 불일치 (안타 %d/%d, 홈런 %d/%d) %s",
-                    game_id, b["name"], parsed_hits, row["h"], kinds.count("HR"), row["hr"], results)
+    if results and parsed_hits != row["h"]:
+        log.warning("%s %s: 타석 결과 해석 불일치 (안타 %d/%d) %s", game_id, b["name"], parsed_hits, row["h"], results)
     return row
 
 
@@ -198,6 +203,7 @@ def parse_record(game: dict, record: dict, team: str) -> tuple[dict, list[dict],
     by_decision = {}
     for x in record.get("pitchingResult") or []:
         by_decision.setdefault(x["wls"], x["name"])
+    team_box = (record.get("teamPitchingBoxscore") or {}).get(side) or {}  # 2008~2010년은 없음
 
     extra = {
         "team_hits": (rheb.get(side) or {}).get("h"),
@@ -206,7 +212,8 @@ def parse_record(game: dict, record: dict, team: str) -> tuple[dict, list[dict],
         "opponent_hits": (rheb.get(opp) or {}).get("h"),
         "opponent_errors": (rheb.get(opp) or {}).get("e"),
         "opponent_walks": (rheb.get(opp) or {}).get("b"),
-        "team_er": ((record.get("teamPitchingBoxscore") or {}).get(side) or {}).get("er"),
+        "team_er": team_box.get("er"),
+        "team_outs": ip_to_outs(team_box["inn"]) if team_box.get("inn") else None,
         "line_score": json.dumps({"team": inn.get(side), "opponent": inn.get(opp)}),
         "win_pitcher": by_decision.get("W") or game.get("win_pitcher"),
         "lose_pitcher": by_decision.get("L") or game.get("lose_pitcher"),
@@ -229,5 +236,31 @@ def parse_record(game: dict, record: dict, team: str) -> tuple[dict, list[dict],
         for i, p in enumerate(pitchers.get(s) or []):
             pitching.append(pitching_row(gid, codes[s], i, p, decisions))
 
+    # 2024년 이전 박스스코어는 타자별 도루 수가 0으로 비어 있어 경기 기록 문구('도루: 이종욱2(1 6회) ...')로 채운다.
+    # 이름이 양 팀에 겹치면 누구 기록인지 알 수 없어 건너뛴다. (2025~2026년 306경기에서 두 값이 모두 일치함을 확인)
+    steals = stolen_bases(record)
+    names = Counter(row["player_name"] for row in batting)
+    for row in batting:
+        if names[row["player_name"]] == 1 and steals.get(row["player_name"], 0) > row["sb"]:
+            row["sb"] = steals[row["player_name"]]
+
+    # 옛 일정에는 선발 이름이 없어 박스스코어의 첫 투수로 채운다
+    for key, s in (("team_starter", side), ("opponent_starter", opp)):
+        first = (pitchers.get(s) or [None])[0]
+        if first:
+            extra[key] = first["name"]
+
     standings = record.get(f"{side}Standings")
     return extra, batting, pitching, standings
+
+
+STEAL_ENTRY = re.compile(r"([^\s()\d]+)(\d*)\(([^)]*)\)")  # 이름 + 횟수(생략 시 1) + (이닝)
+
+
+def stolen_bases(record: dict) -> Counter:
+    out = Counter()
+    for x in record.get("etcRecords") or []:
+        if x.get("how") == "도루":
+            for name, n, _ in STEAL_ENTRY.findall(x.get("result") or ""):
+                out[name] += int(n) if n else 1
+    return out
