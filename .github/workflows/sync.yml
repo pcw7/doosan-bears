@@ -44,8 +44,9 @@ jobs:
           if git diff --cached --quiet; then
             echo "새로 끝난 경기 없음"
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            # 내 계정(noreply 이메일)으로 커밋 → 자동 커밋도 잔디에 기록됨
+            git config user.name "pcw7"
+            git config user.email "58602643+pcw7@users.noreply.github.com"
             git commit -m "기록 추가: $(git diff --cached --name-only | wc -l)경기 ($(date +'%Y-%m-%d %H:%M'))"
             git pull --rebase
             git push
