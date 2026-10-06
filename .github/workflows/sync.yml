@@ -2,7 +2,8 @@ name: 경기 기록 수집 & 배포
 
 on:
   schedule:
-    - cron: "0 8-16 * * *"   # 한국시간 매일 17:00 ~ 01:00 매시 정각 (GitHub 사정으로 몇 분~수십 분 늦을 수 있음)
+    # 한국시간 매일 17:07 ~ 01:07 매시 7분. 정각은 GitHub 사용량이 몰려 예약 실행이 늦어지거나 빠지기 쉬워 피한다
+    - cron: "7 8-16 * * *"
   workflow_dispatch:          # Actions 탭에서 수동 실행
   push:
     branches: [main]

@@ -7,7 +7,7 @@ GitHub Actions가 매시간 새 경기를 확인해 수집하고, 결과를 GitH
 ## 동작 방식
 
 ```
-GitHub Actions (한국시간 17:00~01:00 매시 정각)
+GitHub Actions (한국시간 17:07~01:07 매시 7분)
   → 네이버 스포츠에서 두산 일정 확인
   → 새로 끝난 경기의 박스스코어를 암호화해 data/games/에 저장하고 커밋
   → 대시보드(HTML)와 CSV 생성
