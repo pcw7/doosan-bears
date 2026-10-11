@@ -968,7 +968,7 @@ let resizeTimer;
 window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (view === "flow") drawFlow(); }, 150); });
 // 창을 닫으면 주소의 #p=… 를 지워, 같은 링크를 다시 눌러도 열리게 한다
 $("#dlg").addEventListener("close", () => { if (location.hash) history.replaceState(null, "", location.pathname + location.search); });
-$("#foot").textContent = `데이터 출처: 네이버 스포츠 · 경기 ${finals.length}개 기록됨`;
+$("#foot").textContent = `경기 ${finals.length}개 기록됨`;
 </script>
 </body>
 </html>
