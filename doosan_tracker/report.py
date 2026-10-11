@@ -129,7 +129,7 @@ def build_data(conn, season: int, all_seasons: list[int], shared: dict) -> dict:
         "league": league.table(season),  # 왼쪽 순위표 (리그 전체 팀, 정규시즌 기준)
         # 다음 경기 미리보기 (진행 중 시즌 페이지에만)
         "previews": (db.get_meta(conn, "previews") or {}) if season == all_seasons[0] else {},
-        **shared,  # 역대 기록(history), 선수 검색(index) — 모든 시즌 페이지에 같은 내용
+        **shared,  # 역대 기록(history), 선수 검색(index), 선수 통산 기록(careers) — 모든 시즌 페이지에 같은 내용
     }
 
 
@@ -184,7 +184,8 @@ def render_all(conn, site_dir: Path) -> list[int]:
     """시즌마다 <시즌>.html을 만들고, 최신 시즌은 index.html로도 저장한다."""
     all_seasons = seasons(conn)
     # 모든 페이지에 같은 내용이라 한 번만 계산
-    shared = {"history": history(conn, all_seasons), "index": player_index(conn, all_seasons)}
+    shared = {"history": history(conn, all_seasons), "index": player_index(conn, all_seasons),
+              "careers": stats.careers(conn, all_seasons)}
     for s in all_seasons:
         render(conn, s, site_dir / f"{s}.html", all_seasons, shared)
     if all_seasons:

@@ -309,6 +309,54 @@ def transfers(conn, season: int, team: str = TEAM_CODE) -> dict:
 
 # ── 역대 기록 ─────────────────────────────────────────
 
+# 선수 창의 통산 기록 표에 보내는 열 (비율은 시즌 기록 표와 같은 계산으로 여기서 만든다)
+CAREER_BAT = ("g", "pa", "ab", "r", "h", "b2", "b3", "hr", "rbi", "sb", "bb", "so", "avg", "obp", "slg", "ops")
+CAREER_PIT = ("g", "gs", "w", "l", "sv", "hld", "ip", "h", "hr", "bb", "so", "er", "era", "whip")
+BAT_COUNTS = ("g", "pa", "ab", "r", "h", "b2", "b3", "hr", "rbi", "bb", "hbp", "so", "sb", "sf", "sh", "gidp")
+PIT_COUNTS = ("g", "gs", "w", "l", "sv", "hld", "qs", "outs", "bf", "h", "r", "er", "bb", "hbp", "so", "hr", "pitches")
+
+
+def careers(conn, seasons: list[int], team: str = TEAM_CODE) -> dict:
+    """선수별 두산 시절 정규시즌 시즌별 기록과 통산 합계. 크기를 줄이려고 행을 숫자 배열로 담는다.
+    {"bat": 열, "pit": 열, "players": {선수ID: {"b": [[시즌, ...], ..., [None(통산), ...]], "p": [...], "t": [이적 시즌]}},
+     "gaps": {"batting"|"pitching": {시즌: [자료에 기록이 없는 경기 수, 전체 경기 수]}}}"""
+    bat, pit, moved = defaultdict(list), defaultdict(list), defaultdict(list)
+    gaps = {"batting": {}, "pitching": {}}
+    for s in sorted(seasons):
+        g = team_record(conn, s, "regular")["g"]
+        if not g:
+            continue
+        for kind, n in missing_boxes(conn, s, "regular", team).items():
+            if n:
+                gaps[kind][s] = [n, g]
+        for r in batting(conn, s, "regular", team):
+            bat[r["player_id"]].append({**r, "season": s})
+        for r in pitching(conn, s, "regular", team):
+            pit[r["player_id"]].append({**r, "season": s})
+        t = transfers(conn, s, team)
+        for pid in sorted({*t["batting"], *t["pitching"]}):
+            moved[pid].append(s)
+
+    def table(rows, counts, rates, cols):
+        out = [[r["season"]] + [r[k] for k in cols] for r in rows]
+        if len(rows) > 1:
+            total = rates({k: sum(r[k] or 0 for r in rows) for k in counts})
+            out.append([None] + [total[k] for k in cols])
+        return out
+
+    players = {}
+    for pid in sorted(bat.keys() | pit.keys()):
+        e = {}
+        if pid in bat:
+            e["b"] = table(bat[pid], BAT_COUNTS, _bat_rates, CAREER_BAT)
+        if pid in pit:
+            e["p"] = table(pit[pid], PIT_COUNTS, _pit_rates, CAREER_PIT)
+        if moved.get(pid):
+            e["t"] = moved[pid]
+        players[pid] = e
+    return {"bat": CAREER_BAT, "pit": CAREER_PIT, "players": players, "gaps": gaps}
+
+
 # 시리즈를 끝내는 승수 (2015년 이후 방식). 와일드카드는 4위 팀이 1승을 안고 시작해 어느 쪽이든 2승이면 끝난다.
 SERIES_WINS = {"kbo_ps_wd": 2, "kbo_ps_sp": 3, "kbo_ps_po": 3, "kbo_ps_ks": 4}
 NEXT_ROUND = {"kbo_ps_wd": "kbo_ps_sp", "kbo_ps_sp": "kbo_ps_po", "kbo_ps_po": "kbo_ps_ks"}

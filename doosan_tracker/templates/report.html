@@ -136,6 +136,10 @@ tr.box > td { padding: 0; background: var(--hover); }
 .notice { border: 1px solid var(--line); background: var(--hover); border-radius: 8px; padding: 10px 12px; margin-bottom: 4px; }
 .notice .nt { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 .notice .nt .tag { margin: 0 4px 0 0; }
+table.career tr.total td { font-weight: 700; border-top: 2px solid var(--line); }
+table.career a { color: var(--accent); text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+table.career a:hover { text-decoration-color: currentColor; }
+dialog h4 { font-size: 13px; margin: 10px 0 4px; color: var(--muted); }
 .grp { font-size: 14px; margin: 18px 0 8px; }
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .pcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; text-align: center; cursor: pointer; }
@@ -919,6 +923,42 @@ function transferNotice(pid) {
   return `<div class="notice"><div class="nt"><span class="tag">이적</span> 공식 시즌 기록에 두산 경기 밖의 기록이 포함되어 있습니다 (시즌 중 이적 등). 이 페이지의 기록은 두산 경기만 합친 값입니다.</div>${rows}</div>`;
 }
 
+// 두산 통산 기록: 두산 시절 정규시즌 시즌별 기록과 통산 합계 (시즌을 누르면 그 시즌 페이지의 이 선수 창)
+const CAREER_HEADS = { g: "경기", pa: "타석", ab: "타수", r: "득점", h: "안타", b2: "2루타", b3: "3루타", hr: "홈런", rbi: "타점",
+  sb: "도루", bb: "볼넷", so: "삼진", avg: "타율", obp: "출루율", slg: "장타율", ops: "OPS",
+  gs: "선발", w: "승", l: "패", sv: "세", hld: "홀", ip: "이닝", er: "자책", era: "ERA", whip: "WHIP" };
+const PIT_HEADS = { h: "피안타", hr: "피홈런" };
+function careerView(pid) {
+  const C = DATA.careers, me = C && C.players[pid];
+  if (!me) return "";
+  const moved = new Set(me.t || []);
+  const seasonCell = (s) => s == null ? `<td class="l">통산</td>`
+    : `<td class="l">${s === DATA.season ? `<b>${s}</b>` : `<a href="${seasonHref(s)}#p=${pid}">${s}</a>`}${moved.has(s) ? '<span class="tag" title="시즌 중 이적: 두산 경기 기록만 합친 값">이적</span>' : ""}</td>`;
+  const fmt = (k, v) => ["avg", "obp", "slg", "ops"].includes(k) ? rate(v) : ["era", "whip"].includes(k) ? rate(v, 2) : k === "ip" ? esc(v) : v;
+  const table = (rows, cols, heads) => `<div class="scroll"><table class="career"><thead><tr><th class="l">시즌</th>${cols.map((k) => `<th>${heads[k] || CAREER_HEADS[k]}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map((r) => `<tr class="${r[0] == null ? "total" : ""}">${seasonCell(r[0])}${cols.map((k, i) => `<td>${fmt(k, r[i + 1])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  // 자료에 기록이 없는 시즌·경기 안내 (2011년 투수 기록 전체, 2022년 2경기 등)
+  const gapNote = (kind, rows) => {
+    const seasons = rows.map((r) => r[0]).filter((s) => s != null);
+    const first = seasons[0], last = seasons[seasons.length - 1], who = kind === "pitching" ? "투수" : "타자";
+    return Object.entries(C.gaps[kind] || {}).map(([s, [n, g]]) => {
+      s = +s;
+      if (n === g && s > first && s < last) return `${s}년은 자료에 ${who} 기록이 없어 빠져 있습니다.`;
+      if (n < g && seasons.includes(s)) return `${s}년은 ${n}경기의 ${who} 기록이 자료에 없어 합계에서 빠졌을 수 있습니다.`;
+      return "";
+    }).filter(Boolean).map((t) => `<p class="note warn">ⓘ ${t}</p>`).join("");
+  };
+  // 경기 수가 많은 쪽(투수/타자)을 먼저. 투수의 타석 몇 번(지명타자 해제 등)은 30타석 미만이면 생략
+  const sum = (rows, cols, k) => rows.filter((r) => r[0] != null).reduce((a, r) => a + r[cols.indexOf(k) + 1], 0);
+  const pitG = me.p ? sum(me.p, C.pit, "g") : 0, batG = me.b ? sum(me.b, C.bat, "g") : 0;
+  const parts = [];
+  if (me.p) parts.push(["투구", `${table(me.p, C.pit, PIT_HEADS)}${gapNote("pitching", me.p)}`, pitG]);
+  if (me.b && (pitG < batG || sum(me.b, C.bat, "pa") >= 30)) parts.push(["타격", `${table(me.b, C.bat, {})}${gapNote("batting", me.b)}`, batG]);
+  parts.sort((a, b) => b[2] - a[2]);
+  const html = parts.map(([label, body]) => (parts.length > 1 ? `<h4>${label}</h4>` : "") + body).join("");
+  return `<h3>두산 통산 기록</h3><p class="note">두산 소속 정규시즌 기록${moved.size ? " · 이적 표시 시즌은 두산 경기 기록만 합친 값" : ""} · 시즌을 누르면 그 시즌 경기별 기록</p>${html}`;
+}
+
 function playerLog(pid) {
   const bat = [], pit = [];
   let name = "";
@@ -930,15 +970,16 @@ function playerLog(pid) {
   let html = "";
   if (pit.length) {
     const [body, more] = paged("log-pit", pit.reverse().map(([g, p]) => `<tr>${when(g)}<td>${DEC[p.dec] || (p.gs ? "선발" : "")}</td><td>${esc(p.ip)}</td><td>${p.h}</td><td>${p.r}</td><td>${p.er}</td><td>${p.bb}</td><td>${p.so}</td><td>${p.np}</td></tr>`));
-    html += `<h3>투구 기록 (${pit.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th>결과</th><th>이닝</th><th>피안타</th><th>실점</th><th>자책</th><th>볼넷</th><th>삼진</th><th>투구수</th></tr></thead>${body}</table></div>${more}`;
+    html += `<h3>${DATA.season} 경기별 투구 기록 (${pit.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th>결과</th><th>이닝</th><th>피안타</th><th>실점</th><th>자책</th><th>볼넷</th><th>삼진</th><th>투구수</th></tr></thead>${body}</table></div>${more}`;
   }
   const realBat = bat.filter(([, b]) => b.pa > 0 || b.pos !== "투");
   if (realBat.length) {
     const [body, more] = paged("log-bat", realBat.reverse().map(([g, b]) => `<tr>${when(g)}<td class="l">${esc(b.pos)}</td><td>${b.ab}</td><td>${b.r}</td><td>${b.h}</td><td>${b.hr}</td><td>${b.rbi}</td><td>${b.bb}</td><td>${b.so}</td><td class="pa">${esc(b.res)}</td></tr>`));
-    html += `<h3>타격 기록 (${realBat.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">위치</th><th>타수</th><th>득점</th><th>안타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th class="l">타석 결과</th></tr></thead>${body}</table></div>${more}`;
+    html += `<h3>${DATA.season} 경기별 타격 기록 (${realBat.length}경기)</h3><div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">위치</th><th>타수</th><th>득점</th><th>안타</th><th>홈런</th><th>타점</th><th>볼넷</th><th>삼진</th><th class="l">타석 결과</th></tr></thead>${body}</table></div>${more}`;
   }
-  $("#dlgTitle").textContent = `${name} — ${DATA.season} 경기별 기록`;
-  $("#dlgBody").innerHTML = profileHeader(pid, name) + transferNotice(pid) + (html || `<div class="empty">기록 없음</div>`);
+  name = name || (DATA.index[pid] || {}).n || "";
+  $("#dlgTitle").textContent = `${name} — 선수 기록`;
+  $("#dlgBody").innerHTML = profileHeader(pid, name) + transferNotice(pid) + careerView(pid) + (html || `<div class="empty">기록 없음</div>`);
   $("#dlg").showModal();
 }
 
