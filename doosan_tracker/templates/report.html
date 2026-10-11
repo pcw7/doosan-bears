@@ -489,13 +489,13 @@ const PIT_COLS = [["name", "선수", "l"], ["g", "경기"], ["gs", "선발"], ["
 const sortState = { batting: ["pa", -1], pitching: ["outs", -1] };
 let qualifiedOnly = false;
 
-// 네이버에 선수 기록이 없는 경기가 있으면 알려준다 (2011년 투수 기록, 2008년 포스트시즌 등)
+// 자료에 선수 기록이 없는 경기가 있으면 알려준다 (2011년 투수 기록, 2008년 포스트시즌 등)
 function missNote(kind) {
   const s = DATA.stages[stage];
   const miss = s && s.missing ? s.missing[kind] : 0;
   if (!miss) return "";
   const who = kind === "batting" ? "타자" : "투수";
-  return `<p class="note warn">ⓘ ${miss === s.record.g ? `이 시즌은 원본 자료에 ${who} 기록이 없습니다.` : `${s.record.g}경기 중 ${miss}경기는 원본 자료에 ${who} 기록이 없어 선수 기록 합계에서 빠져 있습니다.`}</p>`;
+  return `<p class="note warn">ⓘ ${miss === s.record.g ? `이 시즌은 자료에 ${who} 기록이 없습니다.` : `${s.record.g}경기 중 ${miss}경기는 자료에 ${who} 기록이 없어 선수 기록 합계에서 빠져 있습니다.`}</p>`;
 }
 
 function statsView(kind) {
@@ -541,7 +541,7 @@ function teamView() {
     <h3>팀 타격 · 수비</h3>
     <p class="note">상대 팀 = 두산 경기에서 상대 팀이 기록한 성적 · 실책은 각 팀 수비 실책</p>${missNote("batting")}${bat}
     <h3>투수진</h3>
-    <p class="note">QS = 선발 6이닝 이상 3자책 이하 · 전체 이닝·자책·ERA는 박스스코어의 팀 합계 기준 (공식 규칙상 팀 자책점은 선발+불펜 합보다 적을 수 있음)</p>${missNote("pitching")}${t.noTeamTotals ? `<p class="note warn">ⓘ ${t.noTeamTotals}경기는 원본 자료에 팀 투구 합계가 없어 개인 기록 합으로 계산했습니다 (공식 팀 ERA와 0.01~0.02 차이 날 수 있음)</p>` : ""}${pit}
+    <p class="note">QS = 선발 6이닝 이상 3자책 이하 · 전체 이닝·자책·ERA는 박스스코어의 팀 합계 기준 (공식 규칙상 팀 자책점은 선발+불펜 합보다 적을 수 있음)</p>${missNote("pitching")}${t.noTeamTotals ? `<p class="note warn">ⓘ ${t.noTeamTotals}경기는 자료에 팀 투구 합계가 없어 개인 기록 합으로 계산했습니다 (공식 팀 ERA와 0.01~0.02 차이 날 수 있음)</p>` : ""}${pit}
     <div class="grid2">
       <div><h3>상황별 성적</h3><p class="note">역전승 ${t.comebacks.wins} · 역전패 ${t.comebacks.losses}</p>${splits}</div>
       <div><h3>상대 팀별</h3><p class="note">승률 순</p>${group(t.opponents)}</div>
@@ -550,7 +550,7 @@ function teamView() {
   </div>`;
 }
 
-// ── 선수 탭 ── 포지션별로 묶어 등번호 순으로 카드를 보여준다 (사진은 네이버 이미지 서버에서 바로 불러옴)
+// ── 선수 탭 ── 포지션별로 묶어 등번호 순으로 카드를 보여준다 (사진은 이미지 주소에서 바로 불러옴)
 const GROUP_ORDER = ["투수", "포수", "내야수", "외야수", "지명타자", "야수"];
 const pinfo = (pid) => DATA.players[pid] || {};
 const photo = (pid, name, cls = "") => {
