@@ -661,7 +661,25 @@ function flowView() {
       <div class="chart" id="chMonth" tabindex="0" aria-label="월별 득점과 실점"></div>` : ""}
     <details style="margin-top: 10px"><summary class="note" style="cursor: pointer">표로 보기 (경기별 누적 성적·승패 마진·순위)</summary>
       <div class="scroll" style="max-height: 320px; overflow: auto"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th>결과</th><th>누적</th><th>마진</th><th>순위</th></tr></thead>
-      <tbody>${rows}</tbody></table></div></details></div>`;
+      <tbody>${rows}</tbody></table></div></details>
+    ${DATA.streaks ? `<h3>연속 기록</h3><p class="note">${STREAK_NOTE} · 이름을 누르면 경기별 기록</p>${streakCards(DATA.streaks, false)}` : ""}</div>`;
+}
+
+// 연속 기록 카드: 팀 연승·연패, 선수 연속 경기 안타·출루 (정규시즌, 한 시즌 안). allTime이면 역대 기록 탭용 (시즌 표시, 그 시즌 페이지로 링크)
+const STREAK_NOTE = "무승부는 연승·연패를 끊지 않음 · 연속 안타는 볼넷·사구·희생번트로만 끝난 경기에서 끊기지 않음 (공식 규칙과 같음)";
+function streakCards(S, allTime) {
+  const live = !allTime && !DATA.regularDone;  // 진행 중인 시즌이면 아직 이어지고 있는 기록에 '진행 중' 표시
+  const md = (d) => `${+d.slice(5, 7)}.${+d.slice(8, 10)}`;
+  const when = (r) => `<span class="muted">${allTime ? `${r.season} · ` : ""}${md(r.start)}~${md(r.end)}</span>`;
+  const now = (r) => live && r.active ? '<span class="tag">진행 중</span>' : "";
+  const who = (r) => allTime ? `<a href="${seasonHref(r.season)}#p=${r.pid}">${esc(r.name)}</a>` : `<span class="name" data-pid="${r.pid}">${esc(r.name)}</span>`;
+  // 숫자(<b>, 오른쪽 정렬)를 앞에 둬야 줄이 길어져도 같은 줄 오른쪽에 붙는다
+  const team = (word) => (r) => `<li><b>${r.n}연${word}</b>${when(r)}${r.d ? ` <span class="muted">(${r.d}무 포함)</span>` : ""}${now(r)}</li>`;
+  const player = (tag) => (r) => `<li><b>${r.n}경기</b>${who(r)} ${when(r)}${tag ? now(r) : ""}</li>`;
+  const card = (title, rows, line) => rows && rows.length ? `<div class="rec"><div class="rk">${title}</div><ol>${rows.map(line).join("")}</ol></div>` : "";
+  const active = live && S.active ? card("지금 이어지는 연속 안타", S.active.hit, player(false)) + card("지금 이어지는 연속 출루", S.active.onbase, player(false)) : "";
+  return `<div class="recs">${card("최다 연승", S.team_w, team("승"))}${card("최다 연패", S.team_l, team("패"))}
+    ${card("연속 경기 안타", S.hit, player(true))}${card("연속 경기 출루", S.onbase, player(true))}${active}</div>`;
 }
 
 // 그래프 틀: 너비는 들어갈 자리에 맞추고, 아래 여백에 x축 글자가 들어가게 높이를 잡는다
@@ -882,7 +900,8 @@ function historyView() {
     <tbody>${seasonRows}</tbody></table></div>
     <h3>한 시즌 개인 기록 (${H.seasons[0].season}~)</h3>
     <p class="note">두산 소속 정규시즌 기록 · 타율·OPS는 규정타석, ERA는 규정이닝 이상 · 이름을 누르면 그 시즌 경기별 기록</p>
-    <div class="recs">${cards}</div></div>`;
+    <div class="recs">${cards}</div>
+    ${H.streaks ? `<h3>연속 기록 (${H.seasons[0].season}~)</h3><p class="note">정규시즌, 한 시즌 안의 기록 · ${STREAK_NOTE} · 이름을 누르면 그 시즌 경기별 기록</p>${streakCards(H.streaks, true)}` : ""}</div>`;
 }
 
 // 다른 시즌 페이지에서 '시즌.html#p=선수ID'로 넘어오면 그 선수 기록 창을 바로 연다

@@ -76,7 +76,9 @@ def history(conn, all_seasons: list[int]) -> dict:
         rank = next((t["rank"] for t in table.get("teams", []) if t["id"] == TEAM_CODE), None)
         rows.append({"season": s, **rec, "rank": rank,
                      "post": stats.postseason_result(conn, s, _finished(conn, s))})
-    return {"seasons": rows, "records": stats.season_records(conn, [r["season"] for r in rows])}
+    played = [r["season"] for r in rows]
+    return {"seasons": rows, "records": stats.season_records(conn, played),
+            "streaks": stats.alltime_streaks(conn, played)}
 
 
 def player_index(conn, all_seasons: list[int]) -> dict:
@@ -127,6 +129,7 @@ def build_data(conn, season: int, all_seasons: list[int], shared: dict) -> dict:
         "stages": stages, "games": _games(conn, season),
         "players": _players(conn, season, current=season == all_seasons[0]),
         "league": league.table(season),  # 왼쪽 순위표 (리그 전체 팀, 정규시즌 기준)
+        "streaks": stats.season_streaks(conn, season),  # 시즌 흐름 탭의 연속 기록 (정규시즌)
         # 다음 경기 미리보기 (진행 중 시즌 페이지에만)
         "previews": (db.get_meta(conn, "previews") or {}) if season == all_seasons[0] else {},
         **shared,  # 역대 기록(history), 선수 검색(index), 선수 통산 기록(careers) — 모든 시즌 페이지에 같은 내용

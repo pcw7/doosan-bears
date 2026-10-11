@@ -427,3 +427,83 @@ def season_records(conn, seasons: list[int], top_n: int = 5) -> list[dict]:
         {"label": "탈삼진", **top(pit, "so", "n")},
         {"label": "ERA", **top(pit, "era", "era", highest=False, qualified=True)},
     ]
+
+
+# ── 연속 기록 (정규시즌, 시즌 단위) ─────────────────────
+
+def team_streaks(conn, season: int) -> list[dict]:
+    """연승·연패 구간을 순서대로. 무승부는 연승·연패를 끊지 않는다 (구간 안의 무승부 수는 d).
+    마지막 구간은 active (시즌 끝, 진행 중인 시즌이면 지금까지 이어짐)."""
+    runs, cur, pending = [], None, 0
+    for r in conn.execute("""
+            SELECT game_date, result FROM games WHERE season=? AND stage='regular' AND status='FINAL'
+            ORDER BY game_date, start_time, game_id""", (season,)):
+        if r["result"] == "D":
+            pending += cur is not None
+            continue
+        if cur and cur["type"] == r["result"]:
+            cur.update(n=cur["n"] + 1, d=cur["d"] + pending, end=r["game_date"])
+        else:
+            cur = {"type": r["result"], "n": 1, "d": 0, "start": r["game_date"], "end": r["game_date"], "active": False}
+            runs.append(cur)
+        pending = 0
+    if runs:
+        runs[-1]["active"] = True
+    return runs
+
+
+def player_streaks(conn, season: int, team: str = TEAM_CODE, min_n: int = 3) -> dict:
+    """선수별 연속 경기 안타·출루 구간 (두산 경기). 공식 규칙처럼
+    - 타석이 없는 경기(대주자·대수비)와, 타수·희생플라이 없이 볼넷·사구·희생번트 등으로만 끝난 경기는 끊지도 잇지도 않는다
+      (단 출루 기록은 볼넷·사구가 있으면 이어진다)
+    - 안타(출루)가 없으면 끊긴다. 희생플라이만 친 경기도 끊긴다.
+    마지막까지 끊기지 않은 구간은 active. min_n경기 이상만 돌려준다."""
+    out = {"hit": [], "onbase": []}
+    cur = {}  # (종류, 선수ID) → 진행 중 구간
+    for r in conn.execute("""
+            SELECT b.player_id, b.player_name, g.game_date, b.pa, b.ab, b.h, b.bb, b.hbp, b.sf
+            FROM batting b JOIN games g USING (game_id)
+            WHERE b.team_code=? AND g.season=? AND g.stage='regular' AND g.status='FINAL'
+            ORDER BY g.game_date, g.start_time, g.game_id""", (team, season)):
+        if not r["pa"]:
+            continue
+        neutral = not r["ab"] and not r["sf"]
+        for kind, on in (("hit", r["h"] > 0), ("onbase", r["h"] + r["bb"] + r["hbp"] > 0)):
+            key = (kind, r["player_id"])
+            if on:
+                run = cur.setdefault(key, {"pid": r["player_id"], "n": 0, "start": r["game_date"]})
+                run.update(n=run["n"] + 1, end=r["game_date"], name=r["player_name"])
+            elif not neutral and key in cur:
+                run = cur.pop(key)
+                if run["n"] >= min_n:
+                    out[kind].append({**run, "active": False})
+    for (kind, _), run in cur.items():
+        if run["n"] >= min_n:
+            out[kind].append({**run, "active": True})
+    return out
+
+
+def _top(rows: list[dict], n: int) -> list[dict]:
+    return sorted(rows, key=lambda r: (-r["n"], r.get("season", 0), r["start"]))[:n]
+
+
+def season_streaks(conn, season: int) -> dict:
+    """시즌 흐름 탭: 그 시즌 최다 연승·연패(3개), 연속 경기 안타·출루(5명), 지금 이어지고 있는 선수 기록."""
+    team_runs, ps = team_streaks(conn, season), player_streaks(conn, season)
+    return {
+        "team_w": _top([r for r in team_runs if r["type"] == "W"], 3),
+        "team_l": _top([r for r in team_runs if r["type"] == "L"], 3),
+        "hit": _top(ps["hit"], 5), "onbase": _top(ps["onbase"], 5),
+        "active": {k: _top([r for r in ps[k] if r["active"]], 10) for k in ("hit", "onbase")},
+    }
+
+
+def alltime_streaks(conn, seasons: list[int], top_n: int = 5) -> dict:
+    """역대 기록 탭: 2008년 이후 한 시즌 안의 최다 연승·연패, 연속 경기 안타·출루."""
+    acc = {"team_w": [], "team_l": [], "hit": [], "onbase": []}
+    for s in seasons:
+        for r in team_streaks(conn, s):
+            acc["team_w" if r["type"] == "W" else "team_l"].append({**r, "season": s, "active": False})
+        for kind, rows in player_streaks(conn, s, min_n=5).items():
+            acc[kind] += [{**r, "season": s, "active": False} for r in rows]
+    return {k: _top(v, top_n) for k, v in acc.items()}
