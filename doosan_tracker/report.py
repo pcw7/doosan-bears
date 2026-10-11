@@ -38,7 +38,7 @@ def _games(conn, season: int) -> list[dict]:
             "id": g["game_id"], "date": g["game_date"], "time": g["start_time"], "stage": g["stage"],
             "round": ROUND_NAMES.get(g["round_code"], g["round_code"]), "stadium": g["stadium"],
             "ha": g["home_away"], "opp": g["opponent_name"], "ts": g["team_score"], "os": g["opponent_score"],
-            "result": g["result"], "status": g["status"],
+            "result": g["result"], "status": g["status"], "rank": g["team_rank"],
             "starter": g["team_starter"], "oppStarter": g["opponent_starter"],
             "wp": g["win_pitcher"], "lp": g["lose_pitcher"], "sp": g["save_pitcher"],
             "rheb": [g["team_hits"], g["team_errors"], g["team_walks"],

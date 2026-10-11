@@ -251,6 +251,7 @@ def parse_record(game: dict, record: dict, team: str) -> tuple[dict, list[dict],
             extra[key] = first["name"]
 
     standings = record.get(f"{side}Standings")
+    extra["team_rank"] = (standings or {}).get("rank")  # 그 경기 직후 순위 (시즌 흐름 그래프)
     return extra, batting, pitching, standings
 
 

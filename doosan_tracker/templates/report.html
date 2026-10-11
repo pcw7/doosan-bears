@@ -9,11 +9,14 @@
   --navy: #131230; --red: #d4202c;
   --bg: #f5f6fa; --card: #ffffff; --text: #1b1d29; --muted: #6b6f80; --line: #e3e5ee;
   --win: #1f6feb; --loss: #d4202c; --draw: #8b8f9c; --hover: #f0f2f8; --accent: var(--navy);
+  /* 그래프: 두 계열 색은 검증기(dataviz validate_palette) 통과 값, 축은 한 단계 진한 회색 */
+  --s1: #2a78d6; --s2: #eb6834; --axis: #c3c6d4;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0f1020; --card: #181a2e; --text: #e8e9f0; --muted: #9a9db0; --line: #2a2d45;
     --win: #5b9dff; --loss: #ff5a5f; --draw: #7c8091; --hover: #212440; --accent: #8f9bff;
+    --s1: #3987e5; --s2: #d95926; --axis: #4a4e6e;
   }
 }
 * { box-sizing: border-box; }
@@ -140,6 +143,32 @@ tr.box > td { padding: 0; background: var(--hover); }
 .ph { position: relative; width: 84px; height: 84px; margin: 0 auto 8px; border-radius: 50%; overflow: hidden;
   background: var(--hover); display: grid; place-items: center; color: var(--muted); font-size: 28px; font-weight: 700; }
 .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+/* 시즌 흐름 그래프: 선 2px, 막대 24px 이하·윗면만 둥글게, 격자는 실선 헤어라인, 끝점은 바탕색 고리 */
+.chart { position: relative; margin: 4px 0 6px; outline: none; }
+.chart:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
+.chart svg { display: block; overflow: visible; }
+.chart .grid { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
+.chart .base { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; }
+.chart .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .lbl { fill: var(--text); font-size: 12px; font-weight: 700; }
+.chart .note { fill: var(--muted); font-size: 11px; }
+.chart .ln { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .end { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+.chart .band { fill: var(--accent); opacity: .06; }
+.chart .pos { fill: var(--win); opacity: .14; }
+.chart .neg { fill: var(--loss); opacity: .14; }
+.chart .xh { stroke: var(--muted); stroke-width: 1; }
+.chart .xdot { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+.chart .b1 { fill: var(--s1); } .chart .b2 { fill: var(--s2); }
+.chart .hit { fill: transparent; } .chart .hit:hover, .chart .hit.on { fill: var(--hover); }
+.ctip { position: absolute; z-index: 5; pointer-events: none; background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; line-height: 1.6;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .15); white-space: nowrap; }
+.ctip .tt { color: var(--muted); }
+.ctip b { font-size: 13px; }
+.ctip .key { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 2px 0 4px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .sec a { color: var(--accent); text-decoration: none; }
 .sec a:hover { text-decoration: underline; }
 tr.champ td { background: color-mix(in srgb, #e0a800 14%, transparent); }
@@ -355,8 +384,8 @@ function standings() {
 function tabs() {
   const stages = Object.entries(DATA.stages);
   $("#stageTabs").innerHTML = stages.map(([k, s]) => `<button data-s="${k}" class="${k === stage ? "on" : ""}">${s.label}</button>`).join("");
-  $("#stageTabs").hidden = view === "history";  // 역대 기록은 시즌·경기 구분과 상관없음
-  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["players", "선수"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"], ["history", "역대 기록"]]
+  $("#stageTabs").hidden = view === "history" || view === "flow";  // 역대 기록·시즌 흐름은 경기 구분과 상관없음 (흐름은 정규시즌)
+  $("#viewTabs").innerHTML = [["games", "경기 결과"], ["players", "선수"], ["batting", "타자 기록"], ["pitching", "투수 기록"], ["team", "팀 기록"], ["flow", "시즌 흐름"], ["history", "역대 기록"]]
     .map(([k, l]) => `<button data-v="${k}" class="${k === view ? "on" : ""}">${l}</button>`).join("");
   document.querySelectorAll("#stageTabs button").forEach((b) => b.onclick = () => { stage = b.dataset.s; delete pagers.games; render(); });
   document.querySelectorAll("#viewTabs button").forEach((b) => b.onclick = () => { view = b.dataset.v; render(); });
@@ -559,6 +588,245 @@ function leaders(s) {
   return cards ? `<h3 class="grp">팀 내 1위 <span class="muted">${regular ? `타율·OPS 규정타석 ${minPa}, ERA 규정이닝 ${g}` : ""}</span></h3><div class="leads">${cards}</div>` : "";
 }
 
+// ── 시즌 흐름 ── 정규시즌 경기 순서대로: 순위 추이, 승패 마진(5할 기준), 월별 득실점
+const SVGNS = "http://www.w3.org/2000/svg";
+const svgEl = (parent, tag, attrs = {}, text) => {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  parent.appendChild(e);
+  return e;
+};
+const signed = (n) => (n > 0 ? `+${n}` : `${n}`);
+const niceStep = (span) => [1, 2, 5, 10, 20, 25, 50, 100, 200].find((s) => span / s <= 5) || 500;
+
+function flowData() {
+  let w = 0, l = 0, d = 0;
+  return finals.filter((g) => g.stage === "regular").map((g) => {
+    if (g.result === "W") w++; else if (g.result === "L") l++; else d++;
+    return { g, w, l, d, margin: w - l, rank: g.rank };
+  });
+}
+
+function flowView() {
+  const pts = flowData();
+  if (!pts.length) return `<div class="empty">정규시즌 경기가 없습니다</div>`;
+  const reg = DATA.stages.regular;
+  const rows = pts.map((p) => `<tr><td class="l">${fmtDate(p.g.date)}</td><td class="l">${opp(p.g)}</td>
+    <td><span class="res ${p.g.result}">${RES[p.g.result]}</span> ${p.g.ts}:${p.g.os}</td><td>${p.w}승 ${p.l}패 ${p.d}무</td>
+    <td>${signed(p.margin)}</td><td>${p.rank ? `${p.rank}위` : "-"}</td></tr>`).join("");
+  return `<div class="sec">
+    <p class="note">정규시즌 ${pts.length}경기 · 그래프에 마우스를 올리거나 클릭 후 ←/→ 키로 경기별 값을 볼 수 있습니다</p>
+    <h3>순위 추이</h3><p class="note">그 경기 직후 순위 · 위로 갈수록 높은 순위 · 색 띠는 포스트시즌 진출권</p>
+    <div class="chart" id="chRank" tabindex="0" aria-label="경기별 순위 추이"></div>
+    <h3>승패 마진</h3><p class="note">승 − 패 (0 = 5할) · 파란 영역은 5할 위, 빨간 영역은 5할 아래</p>
+    <div class="chart" id="chMargin" tabindex="0" aria-label="경기별 승패 마진"></div>
+    ${reg && reg.team.months.length ? `<h3>월별 득실점</h3>
+      <div class="legend"><span><i style="background: var(--s1)"></i>득점</span><span><i style="background: var(--s2)"></i>실점</span></div>
+      <div class="chart" id="chMonth" tabindex="0" aria-label="월별 득점과 실점"></div>` : ""}
+    <details style="margin-top: 10px"><summary class="note" style="cursor: pointer">표로 보기 (경기별 누적 성적·승패 마진·순위)</summary>
+      <div class="scroll" style="max-height: 320px; overflow: auto"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th>결과</th><th>누적</th><th>마진</th><th>순위</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></details></div>`;
+}
+
+// 그래프 틀: 너비는 들어갈 자리에 맞추고, 아래 여백에 x축 글자가 들어가게 높이를 잡는다
+function frame(el, { height = 220, left = 40, right = 48, top = 16, bottom = 26 } = {}) {
+  const W = Math.max(300, el.clientWidth), H = height;
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("width", W);
+  svg.setAttribute("height", H);
+  el.replaceChildren(svg);
+  return { el, svg, W, H, x0: left, x1: W - right, y0: top, y1: H - bottom };
+}
+
+// x축: 각 달의 첫 경기 위치에 "4월" 같은 표시. 다음 달과 너무 가까우면(3월처럼 경기가 적은 달) 글자는 생략
+function monthTicks(f, pts, x) {
+  const ticks = [];
+  pts.forEach((p, i) => {
+    const m = p.g.date.slice(5, 7);
+    if (!ticks.length || ticks[ticks.length - 1].m !== m) ticks.push({ m, px: x(i) });
+  });
+  ticks.forEach((t, k) => {
+    svgEl(f.svg, "line", { x1: t.px, x2: t.px, y1: f.y1, y2: f.y1 + 4, class: "base" });
+    if (ticks[k + 1] && ticks[k + 1].px - t.px < 32) return;
+    svgEl(f.svg, "text", { x: t.px + 2, y: f.y1 + 16, class: "tick" }, `${+t.m}월`);
+  });
+}
+
+// 십자선 + 툴팁: 포인터와 가장 가까운 경기에 붙고, 포커스 후 ←/→ 키로도 움직인다
+function crosshair(f, n, x, yAt, rowsAt) {
+  const line = svgEl(f.svg, "line", { y1: f.y0, y2: f.y1, class: "xh", visibility: "hidden" });
+  const dot = svgEl(f.svg, "circle", { r: 5, class: "xdot", visibility: "hidden" });
+  const tip = document.createElement("div");
+  tip.className = "ctip";
+  tip.hidden = true;
+  f.el.appendChild(tip);
+  let cur = -1;
+  const show = (i) => {
+    cur = Math.max(0, Math.min(n - 1, i));
+    const cx = x(cur), cy = yAt(cur);
+    line.setAttribute("x1", cx); line.setAttribute("x2", cx); line.setAttribute("visibility", "visible");
+    if (cy == null) dot.setAttribute("visibility", "hidden");
+    else { dot.setAttribute("cx", cx); dot.setAttribute("cy", cy); dot.setAttribute("visibility", "visible"); }
+    tip.replaceChildren(...rowsAt(cur).map(([value, label]) => {
+      const row = document.createElement("div");
+      const b = document.createElement("b"); b.textContent = value;
+      const s = document.createElement("span"); s.className = "tt"; s.textContent = label ? ` ${label}` : "";
+      row.append(b, s);
+      return row;
+    }));
+    tip.hidden = false;
+    const left = cx + 12 + tip.offsetWidth > f.W ? cx - 12 - tip.offsetWidth : cx + 12;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${f.y0}px`;
+  };
+  const hide = () => { line.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); tip.hidden = true; };
+  const hit = svgEl(f.svg, "rect", { x: f.x0, y: f.y0, width: f.x1 - f.x0, height: f.y1 - f.y0, fill: "transparent" });
+  hit.addEventListener("pointermove", (e) => {
+    const px = (e.offsetX / f.svg.clientWidth) * f.W;
+    show(Math.round(((px - f.x0) / (f.x1 - f.x0)) * (n - 1)));
+  });
+  hit.addEventListener("pointerleave", hide);
+  f.el.onfocus = () => show(cur < 0 ? n - 1 : cur);
+  f.el.onblur = hide;
+  f.el.onkeydown = (e) => {
+    if (e.key === "ArrowLeft") { show(cur - 1); e.preventDefault(); }
+    if (e.key === "ArrowRight") { show(cur + 1); e.preventDefault(); }
+    if (e.key === "Escape") hide();
+  };
+}
+
+const gameLine = (p) => [`${fmtDate(p.g.date)} ${p.g.ha === "H" ? "vs" : "@"} ${p.g.opp}`, `${RES[p.g.result]} ${p.g.ts}:${p.g.os}`];
+
+function rankChart(el, pts) {
+  const teams = (DATA.league && DATA.league.teams.length) || 10;
+  const cut = DATA.season <= 2014 ? 4 : 5;
+  const f = frame(el, { height: 230 });
+  const n = pts.length;
+  const x = (i) => f.x0 + (n < 2 ? 0 : (i / (n - 1)) * (f.x1 - f.x0));
+  const y = (r) => f.y0 + ((r - 1) / (teams - 1)) * (f.y1 - f.y0);
+  const half = (f.y1 - f.y0) / (teams - 1) / 2;
+  // 포스트시즌 진출권 띠 (설명은 그래프 위 문구에 — 띠 안에 글자를 두면 선과 겹친다)
+  svgEl(f.svg, "rect", { x: f.x0, y: f.y0 - half, width: f.x1 - f.x0, height: y(cut) + half - (f.y0 - half), class: "band" });
+  for (let r = 1; r <= teams; r++) {
+    svgEl(f.svg, "line", { x1: f.x0, x2: f.x1, y1: y(r), y2: y(r), class: "grid" });
+    svgEl(f.svg, "text", { x: f.x0 - 8, y: y(r) + 4, class: "tick", "text-anchor": "end" }, `${r}위`);
+  }
+  monthTicks(f, pts, x);
+  let d = "";
+  pts.forEach((p, i) => { if (p.rank) d += `${d && pts[i - 1] && pts[i - 1].rank ? "L" : "M"}${x(i)},${y(p.rank)}`; });
+  svgEl(f.svg, "path", { d, class: "ln" });
+  const last = [...pts].reverse().find((p) => p.rank);
+  if (last) {
+    const i = pts.indexOf(last);
+    svgEl(f.svg, "circle", { cx: x(i), cy: y(last.rank), r: 4, class: "end" });
+    svgEl(f.svg, "text", { x: x(i) + 8, y: y(last.rank) + 4, class: "lbl" }, `${last.rank}위`);
+  }
+  crosshair(f, n, x, (i) => (pts[i].rank ? y(pts[i].rank) : null), (i) => {
+    const p = pts[i];
+    return [[p.rank ? `${p.rank}위` : "순위 정보 없음", ""], [gameLine(p)[0], gameLine(p)[1]]];
+  });
+}
+
+function marginChart(el, pts) {
+  const f = frame(el, { height: 220 });
+  const n = pts.length;
+  const ms = pts.map((p) => p.margin);
+  const step = niceStep(Math.max(1, Math.max(...ms, 0) - Math.min(...ms, 0)));
+  const lo = Math.floor(Math.min(0, ...ms) / step) * step, hi = Math.max(step, Math.ceil(Math.max(0, ...ms) / step) * step);
+  const x = (i) => f.x0 + (n < 2 ? 0 : (i / (n - 1)) * (f.x1 - f.x0));
+  const y = (v) => f.y1 - ((v - lo) / (hi - lo)) * (f.y1 - f.y0);
+  for (let v = lo; v <= hi; v += step) {
+    svgEl(f.svg, "line", { x1: f.x0, x2: f.x1, y1: y(v), y2: y(v), class: v === 0 ? "base" : "grid" });
+    svgEl(f.svg, "text", { x: f.x0 - 8, y: y(v) + 4, class: "tick", "text-anchor": "end" }, signed(v));
+  }
+  monthTicks(f, pts, x);
+  // 선과 0선 사이를 칠하되, 0선 위는 파랑·아래는 빨강만 보이게 잘라낸다
+  const id = `m${Math.random().toString(36).slice(2, 7)}`;
+  const defs = svgEl(f.svg, "defs");
+  svgEl(svgEl(defs, "clipPath", { id: `${id}p` }), "rect", { x: f.x0, y: f.y0 - 4, width: f.x1 - f.x0, height: y(0) - f.y0 + 4 });
+  svgEl(svgEl(defs, "clipPath", { id: `${id}n` }), "rect", { x: f.x0, y: y(0), width: f.x1 - f.x0, height: f.y1 - y(0) + 4 });
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.margin)}`).join("");
+  const area = `${line}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z`;
+  svgEl(f.svg, "path", { d: area, class: "pos", "clip-path": `url(#${id}p)` });
+  svgEl(f.svg, "path", { d: area, class: "neg", "clip-path": `url(#${id}n)` });
+  svgEl(f.svg, "path", { d: line, class: "ln" });
+  const lastP = pts[n - 1];
+  svgEl(f.svg, "circle", { cx: x(n - 1), cy: y(lastP.margin), r: 4, class: "end" });
+  svgEl(f.svg, "text", { x: x(n - 1) + 8, y: y(lastP.margin) + 4, class: "lbl" }, signed(lastP.margin));
+  crosshair(f, n, x, (i) => y(pts[i].margin), (i) => {
+    const p = pts[i];
+    return [[signed(p.margin), `(${p.w}승 ${p.l}패 ${p.d}무)`], [gameLine(p)[0], gameLine(p)[1]]];
+  });
+}
+
+function monthChart(el, months) {
+  const f = frame(el, { height: 210, right: 12 });
+  const max = Math.max(1, ...months.flatMap((m) => [m.rs, m.ra]));
+  const step = niceStep(max);
+  const hi = Math.ceil(max / step) * step;
+  const y = (v) => f.y1 - (v / hi) * (f.y1 - f.y0);
+  for (let v = 0; v <= hi; v += step) {
+    svgEl(f.svg, "line", { x1: f.x0, x2: f.x1, y1: y(v), y2: y(v), class: v === 0 ? "base" : "grid" });
+    svgEl(f.svg, "text", { x: f.x0 - 8, y: y(v) + 4, class: "tick", "text-anchor": "end" }, v);
+  }
+  const band = (f.x1 - f.x0) / months.length;
+  const bw = Math.max(4, Math.min(24, (band - 16) / 2));
+  const bar = (bx, v, cls) => {  // 윗면만 4px 둥글게, 바닥은 기준선에 각지게
+    const top = y(v), r = Math.min(4, (f.y1 - top) / 2, bw / 2);
+    svgEl(f.svg, "path", { class: cls, d: `M${bx},${f.y1}V${top + r}Q${bx},${top} ${bx + r},${top}H${bx + bw - r}Q${bx + bw},${top} ${bx + bw},${top + r}V${f.y1}Z` });
+  };
+  const tip = document.createElement("div");
+  tip.className = "ctip";
+  tip.hidden = true;
+  months.forEach((m, i) => {
+    const cx = f.x0 + band * i + band / 2;
+    const hit = svgEl(f.svg, "rect", { x: f.x0 + band * i + 2, y: f.y0, width: band - 4, height: f.y1 - f.y0, rx: 6, class: "hit", tabindex: -1 });
+    bar(cx - bw - 1, m.rs, "b1");  // 두 막대 사이 2px 틈
+    bar(cx + 1, m.ra, "b2");
+    svgEl(f.svg, "text", { x: cx, y: f.y1 + 16, class: "tick", "text-anchor": "middle" }, m.label);
+    const showTip = () => {
+      f.svg.querySelectorAll(".hit.on").forEach((h) => h.classList.remove("on"));
+      hit.classList.add("on");
+      const row = (key, value, label) => {
+        const d = document.createElement("div");
+        if (key) { const k = document.createElement("span"); k.className = "key"; k.style.background = key; d.append(k); }
+        const b = document.createElement("b"); b.textContent = value;
+        const s = document.createElement("span"); s.className = "tt"; s.textContent = ` ${label}`;
+        d.append(b, s);
+        return d;
+      };
+      tip.replaceChildren(row(null, m.label, `${m.w}승 ${m.l}패 ${m.d}무`), row("var(--s1)", m.rs, "득점"), row("var(--s2)", m.ra, "실점"), row(null, signed(m.rs - m.ra), "득실"));
+      tip.hidden = false;
+      const left = cx + band / 2 + tip.offsetWidth > f.W ? cx - band / 2 - tip.offsetWidth : cx + band / 2;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${f.y0}px`;
+    };
+    hit.addEventListener("pointerenter", showTip);
+    hit.addEventListener("focus", showTip);
+  });
+  el.appendChild(tip);
+  f.svg.addEventListener("pointerleave", () => { tip.hidden = true; f.svg.querySelectorAll(".hit.on").forEach((h) => h.classList.remove("on")); });
+  let cur = -1;
+  const hits = [...f.svg.querySelectorAll(".hit")];
+  el.onkeydown = (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    cur = Math.max(0, Math.min(hits.length - 1, cur + (e.key === "ArrowRight" ? 1 : -1)));
+    hits[cur].dispatchEvent(new Event("pointerenter"));
+    e.preventDefault();
+  };
+  el.onblur = () => { tip.hidden = true; };
+}
+
+function drawFlow() {
+  const pts = flowData();
+  if (!pts.length) return;
+  if ($("#chRank")) rankChart($("#chRank"), pts);
+  if ($("#chMargin")) marginChart($("#chMargin"), pts);
+  if ($("#chMonth")) monthChart($("#chMonth"), DATA.stages.regular.team.months);
+}
+
 // ── 역대 기록 ── 시즌별 팀 성적과 2008년 이후 한 시즌 개인 기록 순위
 const seasonHref = (s) => s === DATA.seasons[0] ? "index.html" : `${s}.html`;
 
@@ -646,7 +914,8 @@ function playerLog(pid) {
 function render() {
   tabs();
   $("#view").innerHTML = view === "games" ? gamesView() : view === "team" ? teamView() : view === "players" ? playersView()
-    : view === "history" ? historyView() : statsView(view);
+    : view === "history" ? historyView() : view === "flow" ? flowView() : statsView(view);
+  if (view === "flow") drawFlow();  // 그래프는 자리가 생긴 뒤 너비에 맞춰 그린다
   document.querySelectorAll("th.sort").forEach((th) => th.onclick = () => {
     const st = sortState[view];
     sortState[view] = [th.dataset.k, st[0] === th.dataset.k ? -st[1] : (th.dataset.k === "name" ? 1 : -1)];
@@ -668,6 +937,8 @@ document.addEventListener("click", (e) => {
 });
 header(); upcoming(); standings(); render(); openFromHash();
 window.addEventListener("hashchange", openFromHash);
+let resizeTimer;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (view === "flow") drawFlow(); }, 150); });
 // 창을 닫으면 주소의 #p=… 를 지워, 같은 링크를 다시 눌러도 열리게 한다
 $("#dlg").addEventListener("close", () => { if (location.hash) history.replaceState(null, "", location.pathname + location.search); });
 $("#foot").textContent = `데이터 출처: 네이버 스포츠 · 경기 ${finals.length}개 기록됨`;
