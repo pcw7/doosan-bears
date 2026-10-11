@@ -4,7 +4,7 @@ on:
   schedule:
     # 한국시간 매일 17:07 ~ 01:07 매시 7분. 정각은 GitHub 사용량이 몰려 예약 실행이 늦어지거나 빠지기 쉬워 피한다
     - cron: "7 8-16 * * *"
-  workflow_dispatch:          # Actions 탭에서 수동 실행
+  workflow_dispatch:          # Actions 탭에서 수동 실행, 그리고 cron-job.org가 17~01시 20분마다 호출 (정시 실행용)
   push:
     branches: [main]
     paths: ["doosan_tracker/**", ".github/workflows/**"]
@@ -77,14 +77,15 @@ jobs:
           path: reports
 
       # 공개 저장소는 60일 동안 커밋이 없으면 예약 실행이 꺼진다 (커밋이 없는 비시즌에 해당).
-      # 워크플로 '켜기'를 다시 호출하면 그 기간이 새로 시작되므로 월요일 예약 실행 때(수동 실행 때도) 호출한다.
+      # 워크플로 '켜기'를 다시 호출하면 그 기간이 새로 시작되므로 월요일 실행 때 호출한다.
+      # (수동 실행은 cron-job.org가 20분마다 부르므로 이것도 월요일에만)
       # 커밋을 만들지 않아 잔디에는 영향이 없다. GitHub가 공식 보장하는 방법은 아니니 개막 전에 한 번 확인할 것.
       - name: 예약 실행 유지 (60일 비활성 꺼짐 방지)
-        if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ !cancelled() && github.event_name != 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ github.event_name }}" = schedule ] && [ "$(date +%u)" != 1 ]; then
+          if [ "$(date +%u)" != 1 ]; then
             echo "월요일이 아니라 건너뜀"
             exit 0
           fi
