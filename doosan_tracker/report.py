@@ -8,6 +8,7 @@ from . import db, league, players, stats
 from .config import ROUND_NAMES, TEAM_CODE, TEAM_NAME
 
 TEMPLATE = Path(__file__).parent / "templates" / "report.html"
+STATIC = Path(__file__).parent / "static"  # 파비콘 등 사이트에 그대로 복사하는 파일
 STAGE_LABELS = [("regular", "정규시즌"), ("postseason", "포스트시즌"), ("exhibition", "시범경기")]
 
 
@@ -188,4 +189,6 @@ def render_all(conn, site_dir: Path) -> list[int]:
         render(conn, s, site_dir / f"{s}.html", all_seasons, shared)
     if all_seasons:
         shutil.copyfile(site_dir / f"{all_seasons[0]}.html", site_dir / "index.html")
+    for f in STATIC.iterdir():
+        shutil.copyfile(f, site_dir / f.name)
     return all_seasons
