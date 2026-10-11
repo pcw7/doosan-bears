@@ -61,21 +61,6 @@ python -m doosan_tracker info --all      # 모든 시즌 선수 정보·순위�
 자동 수집은 Actions가 맡습니다. PC에서 `sync`를 정기적으로 돌리면 같은 파일을 두 곳에서 만들어 `git pull` 때 충돌하니 피하세요.
 직접 수집한 데이터는 `data/`를 커밋하고 push하면 Actions에도 반영됩니다.
 
-## 관리와 문제 해결
-
-- **지금 바로 수집:** 저장소 **Actions → 경기 기록 수집 & 배포 → Run workflow**
-- **실패 알림:** 실행이 실패하면 GitHub가 메일로 알려줍니다. Actions 실행 기록에서 로그를 확인하세요.
-- **실행이 'waiting'으로 멈춤:** 2026-10-07에 배포 환경이 대기 상태로 4일간 멈춘 적이 있습니다(현재는 수집·배포 분리로 수집은 영향 없음).
-  Actions에 오래 멈춘 실행이 보이면 Cancel workflow로 취소하세요. 밀린 경기는 다음 실행이 한꺼번에 받습니다.
-- **정시 실행 (cron-job.org):** 작업 `doosan-bears 수집`이 아래 주소로 POST 요청(본문 `{"ref":"main"}`)을 보냅니다.
-  `https://api.github.com/repos/pcw7/doosan-bears/actions/workflows/sync.yml/dispatches`
-  - 헤더 `Authorization: Bearer <토큰>`의 토큰은 **이 저장소의 Actions 실행 권한만 가진 Fine-grained 토큰**(`doosan-cron`)입니다. 코드·데이터는 건드릴 수 없습니다.
-  - **토큰은 만료일이 있습니다.** 만료되면 cron-job.org 실행이 401로 실패하니, GitHub에서 새로 만들어 cron-job.org 헤더만 바꾸면 됩니다.
-  - 토큰 사본은 이 PC의 `.env`(git에 올라가지 않음)에 보관합니다.
-  - cron-job.org의 "실패 시 알림"을 켜 두면 토큰 만료 등 문제가 생길 때 메일이 옵니다.
-  - 비시즌(11~2월)에는 cron-job.org에서 작업을 꺼 둬도 됩니다. 켜 둬도 바뀐 게 없으면 커밋 없이 끝납니다.
-- **네이버 구조 변경:** 수집이 계속 실패하면 `naver.py`(요청)와 `parse.py`(해석)를 응답에 맞게 고칩니다. 이미 받은 기록과 사이트는 그대로 남습니다.
-
 ## 구성
 
 사용 기술: Python 3.12 (표준 라이브러리 + `cryptography`), SQLite, GitHub Actions, GitHub Pages, cron-job.org.
