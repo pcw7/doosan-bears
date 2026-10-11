@@ -1,10 +1,10 @@
 name: 경기 기록 수집 & 배포
 
+# 실행 시각은 외부 서비스 cron-job.org가 정한다: 한국시간 매일 17:05 ~ 01:45, 20분마다 아래 workflow_dispatch를 호출.
+# GitHub 자체 예약(schedule)은 쓰지 않는다 — 2026-10 실측 결과 예약 실행의 약 75%가 빠지고 최대 5시간씩 늦었다.
+# 예약이 없으면 '60일 동안 활동이 없으면 예약 워크플로를 끈다'는 GitHub 규칙도 적용되지 않는다.
 on:
-  schedule:
-    # 한국시간 매일 17:07 ~ 01:07 매시 7분. 정각은 GitHub 사용량이 몰려 예약 실행이 늦어지거나 빠지기 쉬워 피한다
-    - cron: "7 8-16 * * *"
-  workflow_dispatch:          # Actions 탭에서 수동 실행, 그리고 cron-job.org가 17~01시 20분마다 호출 (정시 실행용)
+  workflow_dispatch:          # cron-job.org가 20분마다 호출 (토큰: Actions 실행 권한만 가진 Fine-grained 토큰), Actions 탭에서 수동 실행도 가능
   push:
     branches: [main]
     paths: ["doosan_tracker/**", ".github/workflows/**"]
@@ -13,7 +13,6 @@ permissions:
   contents: write   # 새 경기 원본·선수 정보·순위표 커밋
   pages: write
   id-token: write
-  actions: write    # 예약 실행 유지 (워크플로 '켜기' 호출)
 
 env:
   TZ: Asia/Seoul
@@ -75,22 +74,6 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: reports
-
-      # 공개 저장소는 60일 동안 커밋이 없으면 예약 실행이 꺼진다 (커밋이 없는 비시즌에 해당).
-      # 워크플로 '켜기'를 다시 호출하면 그 기간이 새로 시작되므로 월요일 실행 때 호출한다.
-      # (수동 실행은 cron-job.org가 20분마다 부르므로 이것도 월요일에만)
-      # 커밋을 만들지 않아 잔디에는 영향이 없다. GitHub가 공식 보장하는 방법은 아니니 개막 전에 한 번 확인할 것.
-      - name: 예약 실행 유지 (60일 비활성 꺼짐 방지)
-        if: ${{ !cancelled() && github.event_name != 'push' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$(date +%u)" != 1 ]; then
-            echo "월요일이 아니라 건너뜀"
-            exit 0
-          fi
-          gh api -X PUT "repos/${{ github.repository }}/actions/workflows/sync.yml/enable"
-          echo "예약 실행 유지 요청 완료"
 
   deploy:
     needs: collect
