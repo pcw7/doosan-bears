@@ -252,7 +252,7 @@ function header() {
     for (let i = last.length - 1; i >= 0 && last[i].result === t; i--) n++;
     streak = `${n}연${t === "W" ? "승" : "패"}`;
   }
-  const done = DATA.finished;
+  const done = DATA.regularDone;  // 정규시즌 종료 (포스트시즌이 남아 있어도 순위·연속 기록은 '최종')
   const latest = DATA.seasons[0];
   const seasonPicker = DATA.seasons.length > 1
     ? `<select id="seasonSel" aria-label="시즌 선택">${DATA.seasons.map((s) => `<option value="${s}" ${s === DATA.season ? "selected" : ""}>${s}</option>`).join("")}</select>`
@@ -266,7 +266,7 @@ function header() {
       ${r ? `<div class="stat"><div class="v">${r.w}승 ${r.l}패 ${r.d}무</div><div class="k">정규시즌 (${r.g}경기)</div></div>
              <div class="stat"><div class="v">${rate(r.pct)}</div><div class="k">승률</div></div>` : ""}
       ${st && st.rank ? `<div class="stat"><div class="v">${st.rank}위</div><div class="k">${done ? "최종 순위" : `순위 (${fmtDate(st.game_date)} 기준)`}</div></div>` : ""}
-      ${postseason(done)}
+      ${postseason()}
       ${r ? `<div class="stat"><div class="v">${r.rs} / ${r.ra}</div><div class="k">득점 / 실점</div></div>` : ""}
       ${streak ? `<div class="stat"><div class="v">${streak}</div><div class="k">${done ? "시즌 마지막 연속" : "현재 연속"}</div></div>` : ""}
       ${recent.length ? `<div class="stat"><div class="strip">${recent.map((g) => `<span class="${g.result}" title="${fmtDate(g.date)} ${esc(vs(g))} ${g.ts}-${g.os}">${RES[g.result]}</span>`).join("")}</div><div class="k">${done ? "시즌 마지막" : "최근"} ${recent.length}경기</div></div>` : ""}
@@ -311,36 +311,54 @@ function setupSearch() {
   document.addEventListener("click", (e) => { if (!e.target.closest(".search")) out.hidden = true; });
 }
 
-// 포스트시즌 성적: 한국시리즈 4승이면 우승, 끝난 시즌이면 마지막 라운드에서 탈락(한국시리즈는 준우승)
-function postseason(done) {
+// 포스트시즌 성적: 결과 문구(우승·탈락·진출·진행 중)는 시리즈 전적으로 판단한 DATA.post
+function postseason() {
   const ps = finals.filter((g) => g.stage === "postseason");
-  if (!ps.length) return "";
+  if (!ps.length || !DATA.post) return "";
   const w = ps.filter((g) => g.result === "W").length, l = ps.filter((g) => g.result === "L").length;
-  const lastRound = ps[ps.length - 1].round;
-  const ksWins = ps.filter((g) => g.round === "한국시리즈" && g.result === "W").length;
-  const label = ksWins >= 4 ? "한국시리즈 우승"
-    : !done ? `${lastRound} 진행 중`
-    : lastRound === "한국시리즈" ? "한국시리즈 준우승" : `${lastRound} 탈락`;
-  return `<div class="stat"><div class="v">${label}</div><div class="k">포스트시즌 ${w}승 ${l}패</div></div>`;
+  const label = DATA.post === "우승" || DATA.post === "준우승" ? `한국시리즈 ${DATA.post}` : DATA.post;
+  return `<div class="stat"><div class="v">${esc(label)}</div><div class="k">포스트시즌 ${w}승 ${l}패</div></div>`;
+}
+
+// 포스트시즌 시리즈 전적 (두산 기준). 와일드카드는 정규시즌 4위 팀이 1승을 안고 시작한다 (2015년~)
+const SERIES_WINS = { "와일드카드": 2, "준플레이오프": 3, "플레이오프": 3, "한국시리즈": 4 };
+function series(round, upto) {  // upto 경기까지 (없으면 지금까지)
+  const games = finals.filter((g) => g.stage === "postseason" && g.round === round);
+  const n = upto ? games.indexOf(upto) + 1 : games.length;
+  const played = games.slice(0, n);
+  let w = played.filter((g) => g.result === "W").length, l = played.filter((g) => g.result === "L").length;
+  const rank = DATA.standings && DATA.standings.rank;
+  if (round === "와일드카드") { w += rank === 4; l += rank === 5; }
+  return { n, w, l, decided: Math.max(w, l) >= (SERIES_WINS[round] || Infinity) };
 }
 
 function upcoming() {
   const n = new Date();
   const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-  const list = DATA.games.filter((g) => (g.status === "SCHEDULED" || g.status === "LIVE") && g.date >= today).slice(0, 4);
+  // 이미 끝난 포스트시즌 시리즈의 '필요 시' 경기는 일정에 남아 있어도 빼고 보여준다
+  const list = DATA.games.filter((g) => (g.status === "SCHEDULED" || g.status === "LIVE") && g.date >= today
+    && !(g.stage === "postseason" && series(g.round).decided)).slice(0, 4);
   if (!list.length) return;
   $("#upcomingCard").hidden = false;
+  const nth = {};  // 포스트시즌: 라운드별 N차전, 첫 경기에는 지금까지 시리즈 전적
+  for (const g of list) {
+    if (g.stage !== "postseason") continue;
+    const s = series(g.round);
+    nth[g.id] = `${esc(g.round)} ${s.n + 1 + list.filter((x) => x.round === g.round && x.date < g.date).length}차전`
+      + (g === list[0] ? ` · 시리즈 ${s.w}승 ${s.l}패${g.round === "와일드카드" ? " (4위 1승 포함)" : ""}` : "");
+  }
+  const round = (g) => nth[g.id] || esc(g.round);
   const simple = (g) => `
-    <div class="up"><div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${esc(g.round)}</div>
+    <div class="up"><div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${round(g)}</div>
     <div class="o">${opp(g)} ${g.status === "LIVE" ? '<span class="live">● 진행 중</span>' : ""}</div>
     <div class="d">선발: ${esc(g.starter || "미정")} vs ${esc(g.oppStarter || "미정")}</div></div>`;
   const pv = (DATA.previews || {})[list[0].id];
-  $("#upcoming").innerHTML = (pv && list[0].status === "SCHEDULED" ? previewCard(list[0], pv) : simple(list[0]))
+  $("#upcoming").innerHTML = (pv && list[0].status === "SCHEDULED" ? previewCard(list[0], pv, round(list[0])) : simple(list[0]))
     + list.slice(1).map(simple).join("");
 }
 
 // 다음 경기 미리보기: 선발 매치업(시즌·상대 전적), 시즌 맞대결, 양 팀 최근 5경기, 순위
-function previewCard(g, pv) {
+function previewCard(g, pv, round) {
   const starter = (s, team, vsName) => s
     ? `<div class="sp"><div><span class="pno">${esc(s.no || "")}</span> <b>${esc(s.name)}</b> <span class="muted">${esc(team)}</span></div>
        <div>${s.season.g ?? 0}경기 ${s.season.w ?? 0}승 ${s.season.l ?? 0}패 · ERA <b>${esc(s.season.era ?? "-")}</b></div>
@@ -350,10 +368,10 @@ function previewCard(g, pv) {
   const rank = (s) => s && s.rank ? `${s.rank}위 (${s.w}승 ${s.l}패 ${s.d}무)` : "";
   const v = pv.vs || {};
   return `<div class="up big">
-    <div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${esc(g.round)}</div>
+    <div class="d">${fmtDate(g.date)} ${esc(g.time || "")} · ${esc(g.stadium || "")} · ${round}</div>
     <div class="o">${opp(g)}</div>
     <div class="matchup">${starter(pv.team_starter, "두산", g.opp)}<div class="vsx">VS</div>${starter(pv.opp_starter, g.opp, "두산")}</div>
-    <div class="pvrow"><span class="k">시즌 상대 전적</span><span><b>${v.w ?? 0}승 ${v.l ?? 0}패 ${v.d ?? 0}무</b> <span class="muted">(두산 기준)</span></span></div>
+    <div class="pvrow"><span class="k">${g.stage === "postseason" ? "정규시즌" : "시즌"} 상대 전적</span><span><b>${v.w ?? 0}승 ${v.l ?? 0}패 ${v.d ?? 0}무</b> <span class="muted">(두산 기준)</span></span></div>
     <div class="pvrow"><span class="k">최근 5경기</span><span>두산 ${strip(pv.team_recent || [])} <span class="gap"></span> ${esc(g.opp)} ${strip(pv.opp_recent || [])}</span></div>
     <div class="pvrow"><span class="k">순위</span><span>두산 ${rank(pv.team_standing)} · ${esc(g.opp)} ${rank(pv.opp_standing)}</span></div>
   </div>`;
@@ -365,7 +383,7 @@ function standings() {
   if (!L || !L.teams.length) return;
   const cut = DATA.season <= 2014 ? 4 : 5;
   const me = L.teams.find((t) => t.id === "OB");
-  const when = DATA.finished ? "정규시즌 최종" : `${fmtDate(L.as_of)} 기준`;
+  const when = DATA.regularDone ? "정규시즌 최종" : `${fmtDate(L.as_of)} 기준`;
   const gb = (v) => !v ? "-" : (Number.isInteger(v) ? v : v.toFixed(1));
   const rows = L.teams.map((t, i) => `<tr class="${t.id === "OB" ? "me" : ""} ${i === cut - 1 ? "cut" : ""}" title="${esc(`최근 5경기 ${t.last5 || "-"} · ${t.streak || ""}`)}">
     <td>${t.rank}</td><td class="l">${esc(t.name)}</td><td>${t.w}</td><td>${t.l}</td><td>${t.d}</td><td>${rate(t.pct)}</td><td>${gb(t.gb)}</td></tr>`).join("");
@@ -375,7 +393,7 @@ function standings() {
     <summary>KBO 순위${me ? ` · 두산 ${me.rank}위` : ""} <span class="muted">${when}</span></summary>
     <div class="side-hd"><b>${DATA.season} KBO 순위</b><span>${when}</span></div>
     <table class="stand"><thead><tr><th></th><th class="l">팀</th><th>승</th><th>패</th><th>무</th><th>승률</th><th>차</th></tr></thead><tbody>${rows}</tbody></table>
-    <p class="note" style="margin: 8px 0 0">점선 위 ${cut}팀: 포스트시즌 진출${DATA.finished ? "" : "권"}</p></details>`;
+    <p class="note" style="margin: 8px 0 0">점선 위 ${cut}팀: 포스트시즌 진출${DATA.regularDone ? "" : "권"}</p></details>`;
   const box = $("#standBox"), wide = matchMedia("(min-width: 1200px)");
   box.open = wide.matches;
   wide.addEventListener("change", (e) => { if (e.matches) box.open = true; });
@@ -437,16 +455,25 @@ function showMore(id) {
 }
 
 const gameList = () => DATA.games.filter((g) => g.stage === stage && (g.status === "FINAL" || g.status === "CANCELLED")).reverse();
-const gameRow = (g) => g.status === "CANCELLED"
+// 포스트시즌: 날짜 옆에 'N차전', 결과 옆에 그 경기까지의 시리즈 전적
+const psInfo = (g) => {
+  if (g.stage !== "postseason" || g.status !== "FINAL") return ["", ""];
+  const s = series(g.round, g);
+  return [` <span class="muted">${esc(g.round)} ${s.n}차전</span>`, ` <span class="muted">${s.w}승 ${s.l}패</span>`];
+};
+const gameRow = (g) => { const [nth, sr] = psInfo(g); return g.status === "CANCELLED"
   ? `<tr class="muted"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td><td colspan="6" class="l">경기 취소</td></tr>`
-  : `<tr class="game" data-id="${g.id}"><td class="l">${fmtDate(g.date)}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td>
-     <td><b>${g.ts}</b> : ${g.os}</td><td><span class="res ${g.result}">${RES[g.result]}</span></td>
-     <td class="l">${esc(g.wp || "")}</td><td class="l">${esc(g.lp || "")}</td><td class="l">${esc(g.sp || "")}</td><td class="l">${esc(g.starter || "")}</td></tr>`;
+  : `<tr class="game" data-id="${g.id}"><td class="l">${fmtDate(g.date)}${nth}</td><td class="l">${opp(g)}</td><td class="l">${esc(g.stadium || "")}</td>
+     <td><b>${g.ts}</b> : ${g.os}</td><td><span class="res ${g.result}">${RES[g.result]}</span>${sr}</td>
+     <td class="l">${esc(g.wp || "")}</td><td class="l">${esc(g.lp || "")}</td><td class="l">${esc(g.sp || "")}</td><td class="l">${esc(g.starter || "")}</td></tr>`; };
+
 function gamesView() {
   const list = gameList();
   if (!list.length) return `<div class="empty">기록된 경기가 없습니다</div>`;
   const [body, more] = paged("games", list.map(gameRow), true);
-  return `<div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">구장</th><th>스코어</th><th>결과</th><th class="l">승리투수</th><th class="l">패전투수</th><th class="l">세이브</th><th class="l">선발</th></tr></thead>
+  const wc = list.some((g) => g.round === "와일드카드")
+    ? `<p class="note">와일드카드 결정전은 정규시즌 4위 팀이 1승을 안고 시작합니다 (시리즈 전적에 포함).</p>` : "";
+  return `${wc}<div class="scroll"><table><thead><tr><th class="l">날짜</th><th class="l">상대</th><th class="l">구장</th><th>스코어</th><th>결과</th><th class="l">승리투수</th><th class="l">패전투수</th><th class="l">세이브</th><th class="l">선발</th></tr></thead>
     ${body}</table></div>${more}`;
 }
 

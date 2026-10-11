@@ -60,6 +60,19 @@ def restore(conn) -> int:
     return n
 
 
+def drop_vanished(conn, start: date, end: date, seen: set[str]) -> None:
+    """일정에서 사라진 예정 경기를 지운다. 포스트시즌 '필요 시' 경기(와일드카드 2차전, 한국시리즈 6·7차전 등)는
+    미리 일정에 올라 있다가 시리즈가 끝나면 빠지는데, 그대로 두면 다음 경기로 계속 보이기 때문."""
+    rows = conn.execute("""
+        SELECT game_id, game_date, opponent_name FROM games
+        WHERE status = 'SCHEDULED' AND game_date BETWEEN ? AND ?""", (start.isoformat(), end.isoformat())).fetchall()
+    gone = [r for r in rows if r["game_id"] not in seen]
+    with conn:
+        for r in gone:
+            conn.execute("DELETE FROM games WHERE game_id = ?", (r["game_id"],))
+            log.info("일정에서 빠진 경기 삭제: %s %s %s", r["game_date"], r["opponent_name"], r["game_id"])
+
+
 def sync(conn, start: date | None = None, end: date | None = None, force: bool = False) -> Counter:
     restore(conn)
     today = date.today()
@@ -70,6 +83,7 @@ def sync(conn, start: date | None = None, end: date | None = None, force: bool =
     games = [g for g in naver.fetch_schedule(start, end)
              if TEAM_CODE in (g["homeTeamCode"], g["awayTeamCode"])]
     games.sort(key=lambda g: g.get("gameDateTime") or g["gameDate"])
+    drop_vanished(conn, start, end, {g["gameId"] for g in games})
 
     stats = Counter()
     for g in games:

@@ -50,11 +50,18 @@ def _games(conn, season: int) -> list[dict]:
     return out
 
 
-def _finished(conn, season: int) -> bool:
-    """남은 경기가 없으면 끝난 시즌 (화면에 '최종 순위'로 표시)."""
+def _finished(conn, season: int, stage: str | None = None) -> bool:
+    """남은 경기가 없으면 끝난 시즌. stage를 주면 그 구분(정규시즌 등)만 본다."""
     return conn.execute("""
         SELECT COUNT(*) FROM games WHERE season=? AND status IN ('SCHEDULED', 'LIVE', 'SUSPENDED')
-        AND game_date >= ?""", (season, date.today().isoformat())).fetchone()[0] == 0
+        AND game_date >= ? AND stage = COALESCE(?, stage)""", (season, date.today().isoformat(), stage)).fetchone()[0] == 0
+
+
+def _regular_done(conn, season: int) -> bool:
+    """정규시즌이 끝났는지 (화면에 '최종 순위'로 표시). 포스트시즌 경기가 잡혀 있어도 정규시즌은 끝난 것으로 본다."""
+    played = conn.execute("SELECT COUNT(*) FROM games WHERE season=? AND stage='regular' AND status='FINAL'",
+                          (season,)).fetchone()[0]
+    return played > 0 and _finished(conn, season, "regular")
 
 
 def history(conn, all_seasons: list[int]) -> dict:
@@ -107,12 +114,15 @@ def build_data(conn, season: int, all_seasons: list[int], shared: dict) -> dict:
             for row in stages["regular"][kind]:
                 if row["player_id"] in moved[kind]:
                     row["official"] = moved[kind][row["player_id"]]
+    finished = _finished(conn, season)
     return {
         "team": TEAM_NAME, "season": season, "seasons": all_seasons,
         "generatedAt": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "lastSync": db.get_meta(conn, "last_sync"),
         "standings": db.get_meta(conn, f"standings:{season}"),
-        "finished": _finished(conn, season),
+        "finished": finished,
+        "regularDone": _regular_done(conn, season),
+        "post": stats.postseason_result(conn, season, finished),  # 우승 / 와일드카드 탈락 / 준플레이오프 진출 / ... 진행 중
         "stages": stages, "games": _games(conn, season),
         "players": _players(conn, season, current=season == all_seasons[0]),
         "league": league.table(season),  # 왼쪽 순위표 (리그 전체 팀, 정규시즌 기준)

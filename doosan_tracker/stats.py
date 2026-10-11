@@ -309,8 +309,23 @@ def transfers(conn, season: int, team: str = TEAM_CODE) -> dict:
 
 # ── 역대 기록 ─────────────────────────────────────────
 
+# 시리즈를 끝내는 승수 (2015년 이후 방식). 와일드카드는 4위 팀이 1승을 안고 시작해 어느 쪽이든 2승이면 끝난다.
+SERIES_WINS = {"kbo_ps_wd": 2, "kbo_ps_sp": 3, "kbo_ps_po": 3, "kbo_ps_ks": 4}
+NEXT_ROUND = {"kbo_ps_wd": "kbo_ps_sp", "kbo_ps_sp": "kbo_ps_po", "kbo_ps_po": "kbo_ps_ks"}
+
+
+def series_score(results: list[str], round_code: str, rank: int | None) -> tuple[int, int]:
+    """그 라운드의 두산 기준 시리즈 전적 (승, 패). 와일드카드는 4위 팀의 1승을 포함한다."""
+    w, l = results.count("W"), results.count("L")
+    if round_code == "kbo_ps_wd":
+        w, l = w + (rank == 4), l + (rank == 5)
+    return w, l
+
+
 def postseason_result(conn, season: int, finished: bool, team: str = TEAM_CODE) -> str | None:
-    """포스트시즌 결과: 한국시리즈 4승이면 우승, 끝난 시즌이면 마지막 라운드 탈락(한국시리즈는 준우승)."""
+    """포스트시즌 결과: 한국시리즈 4승이면 우승, 시리즈를 지면 그 라운드 탈락(한국시리즈는 준우승),
+    이기면 다음 라운드 진출. 시리즈 전적으로 판단해 '필요 시' 경기가 일정에 남아 있거나
+    다음 라운드 일정이 아직 안 나온 사이에도 맞게 표시한다."""
     rows = conn.execute("""
         SELECT round_code, result FROM games WHERE season=? AND stage='postseason' AND status='FINAL'
         ORDER BY game_date, start_time, game_id""", (season,)).fetchall()
@@ -319,9 +334,19 @@ def postseason_result(conn, season: int, finished: bool, team: str = TEAM_CODE) 
     if sum(r["round_code"] == "kbo_ps_ks" and r["result"] == "W" for r in rows) >= 4:
         return "우승"
     last = rows[-1]["round_code"]
-    if not finished:
-        return f"{ROUND_NAMES.get(last, last)} 진행 중"
-    return "준우승" if last == "kbo_ps_ks" else f"{ROUND_NAMES.get(last, last)} 탈락"
+    name = ROUND_NAMES.get(last, last)
+    lost = "준우승" if last == "kbo_ps_ks" else f"{name} 탈락"
+    standing = conn.execute("SELECT value FROM meta WHERE key=?", (f"standings:{season}",)).fetchone()
+    rank = json.loads(standing[0]).get("rank") if standing else None
+    w, l = series_score([r["result"] for r in rows if r["round_code"] == last], last, rank)
+    need = SERIES_WINS.get(last)
+    if need and l >= need:
+        return lost
+    if need and w >= need and last in NEXT_ROUND:
+        return f"{ROUND_NAMES[NEXT_ROUND[last]]} 진출"
+    if need or not finished:  # 시리즈가 안 끝났으면 다음 경기 일정이 아직 안 나왔어도 진행 중
+        return f"{name} 진행 중"
+    return lost
 
 
 def season_records(conn, seasons: list[int], top_n: int = 5) -> list[dict]:
