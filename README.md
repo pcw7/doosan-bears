@@ -1,9 +1,15 @@
 # 두산 베어스 기록 자동 수집기
 
+[![경기 기록 수집 & 배포](https://github.com/pcw7/doosan-bears/actions/workflows/sync.yml/badge.svg)](https://github.com/pcw7/doosan-bears/actions/workflows/sync.yml)
+
 두산 베어스 경기가 끝날 때마다 경기 결과와 선수 기록을 자동으로 모아 웹 대시보드로 보여주는 개인 팬 프로젝트입니다.
 경기 시간대(한국시간 17:05~01:45)에 20분마다 새 경기를 확인해 수집하고, GitHub Pages에 배포합니다.
 
 **대시보드: https://pcw7.github.io/doosan-bears/** (2008년~현재, 시즌마다 페이지)
+
+| 메인 화면 | 시즌 흐름 탭 |
+|---|---|
+| ![메인 화면: 시즌 성적, KBO 순위표, 다음 경기 선발 매치업, 경기 결과](docs/screenshot-main.png) | ![시즌 흐름 탭: 순위 추이, 승패 마진, 월별 득실점 그래프](docs/screenshot-flow.png) |
 
 ## 화면
 
@@ -42,7 +48,7 @@ GitHub Actions
 
 - 실행 시각은 외부 무료 서비스 **cron-job.org**가 정합니다. GitHub 자체 예약 실행은 실측 결과 약 75%가 빠지고 최대 5시간씩 늦어서 쓰지 않습니다.
 - 수집과 배포를 나눠서, 배포가 멈춰도 수집은 계속됩니다. 멈춘 배포는 다음 배포가 취소하고 대신합니다.
-- 바뀐 게 없으면 커밋하지 않습니다. 경기가 없는 시간에도 배포는 해서 "다음 경기"와 "진행 중" 표시는 매시간 갱신됩니다.
+- 바뀐 게 없으면 커밋하지 않습니다. 경기가 없는 시간에도 배포는 해서 "다음 경기"(선발 발표 등)와 "진행 중" 표시는 실행할 때마다 갱신됩니다.
 - 자동 커밋은 저장소 주인 계정(noreply 이메일)으로 해서 GitHub 잔디에 기록됩니다.
 
 ## 데이터 출처
@@ -143,6 +149,9 @@ python -m doosan_tracker info --all      # 모든 시즌 선수 정보·순위�
 
 ## 구성
 
+사용 기술: Python 3.12 (표준 라이브러리 + `cryptography`), SQLite, GitHub Actions, GitHub Pages, cron-job.org.
+웹페이지는 HTML 파일 하나에 데이터를 넣어 만들고, 그래프는 차트 라이브러리 없이 SVG로 직접 그립니다.
+
 ```
 doosan_tracker/
   naver.py      네이버 스포츠 API 호출
@@ -157,6 +166,7 @@ doosan_tracker/
   export.py     CSV 내보내기
   report.py     웹페이지 생성 (templates/report.html)
 .github/workflows/sync.yml   자동 수집 + Pages 배포
+docs/                        README 화면 캡처
 ```
 
 ## 이용 안내
