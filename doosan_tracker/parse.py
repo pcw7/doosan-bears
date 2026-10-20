@@ -3,6 +3,7 @@ import json
 import logging
 import re
 from collections import Counter
+from datetime import date, timedelta
 
 from .config import STAGES
 
@@ -13,13 +14,21 @@ DECISIONS_KO = {"승": "W", "패": "L", "세": "S", "홀": "H"}
 FRACTIONS = {"⅓": 1, "⅔": 2}
 
 
+ENDED_GRACE_DAYS = 2
+
+
 def game_status(g: dict) -> str:
     if g.get("cancel"):
         return "CANCELLED"
     if g.get("suspended"):
         return "SUSPENDED"
-    # ENDED: 2008년 포스트시즌 등 옛 경기의 종료 상태 (점수·이닝별 점수만 있고 선수 기록은 없음)
-    return {"RESULT": "FINAL", "ENDED": "FINAL", "STARTED": "LIVE", "BEFORE": "SCHEDULED"}.get(
+    if g.get("statusCode") == "ENDED":
+        # 경기 직후 기록을 정리하는 동안의 상태: 점수가 0:0이거나 승패 투수가 비어 있다가 몇 분~몇 시간 뒤 RESULT로 바뀐다
+        # (2026-10-14 와일드카드가 0:0 무승부로 저장된 적 있음). 2008년 포스트시즌·2011/2014년 시범경기처럼
+        # ENDED로 남은 옛 경기만 종료로 보고, 최근 경기는 진행 중으로 두어 다음 실행에서 다시 받는다.
+        ended_long_ago = date.fromisoformat(g["gameDate"]) <= date.today() - timedelta(days=ENDED_GRACE_DAYS)
+        return "FINAL" if ended_long_ago else "LIVE"
+    return {"RESULT": "FINAL", "STARTED": "LIVE", "BEFORE": "SCHEDULED"}.get(
         g.get("statusCode"), g.get("statusCode") or "UNKNOWN")
 
 
