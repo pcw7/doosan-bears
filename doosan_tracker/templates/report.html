@@ -7,231 +7,332 @@
 <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#131230">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17171a" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
+/* achromatic-ledger (taste-skill app sheet, seed 2109369373): 장식에는 색을 쓰지 않고 숫자는 먹색, 색은 데이터에만.
+   글자 먹색은 두산 남색, 바탕은 기록지 같은 청회색. 빨강은 패배·나쁜 변화에만 쓴다. */
 :root {
-  --navy: #131230; --red: #d4202c;
-  --bg: #f5f6fa; --card: #ffffff; --text: #1b1d29; --muted: #6b6f80; --line: #e3e5ee;
-  --win: #1f6feb; --loss: #d4202c; --draw: #8b8f9c; --hover: #f0f2f8; --accent: var(--navy);
-  /* 그래프: 두 계열 색은 검증기(dataviz validate_palette) 통과 값, 축은 한 단계 진한 회색 */
-  --s1: #2a78d6; --s2: #eb6834; --axis: #c3c6d4;
+  --bg: #f2f4f7; --card: #ffffff; --raised: #f7f8fa; --hover: #f3f5f8; --active: #eceff3;
+  --line: #e3e6eb; --rule: #eef0f3; --control: #cfd4dc;
+  --text: #131230; --text2: #3b3f52; --muted: #5b6073; --accent: var(--text);
+  --win: #1d5fbf; --win-bg: #e4edfa; --win-ink: #123f80;
+  --loss: #d4202c; --loss-bg: #fdecec; --loss-ink: #8c1820;
+  --draw: #7a8090; --draw-bg: #eceff3; --draw-ink: #3b3f52;
+  --gold: #8a6100;
+  /* 그래프: 주요 데이터(득점·5할 위)는 데이터 색 하나, 비교 대상(실점)은 회색 */
+  --s1: var(--win); --s2: #a3a9b6; --axis: #c3c8d2;
+  --r-card: 8px; --r-control: 6px; --r-chip: 4px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1020; --card: #181a2e; --text: #e8e9f0; --muted: #9a9db0; --line: #2a2d45;
-    --win: #5b9dff; --loss: #ff5a5f; --draw: #7c8091; --hover: #212440; --accent: #8f9bff;
-    --s1: #3987e5; --s2: #d95926; --axis: #4a4e6e;
+    --bg: #0e0e10; --card: #17171a; --raised: #1d1d21; --hover: #202024; --active: #26262b;
+    --line: #2a2a30; --rule: #222226; --control: #45454d;
+    --text: #f1f1f3; --text2: #d0d0d6; --muted: #a9a9b2;
+    --win: #5b9dff; --win-bg: #182a45; --win-ink: #a9c9ff;
+    --loss: #ff6b6b; --loss-bg: #3a1a1d; --loss-ink: #ffb3b3;
+    --draw: #8a8f99; --draw-bg: #26262b; --draw-ink: #cfd0d6;
+    --gold: #e2b33c; --s2: #6f7480; --axis: #4a4a52;
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scrollbar-gutter: stable; }
 body { margin: 0; background: var(--bg); color: var(--text);
-  font: 14px/1.5 "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
-header { background: var(--navy); color: #fff; padding: 28px 16px 22px; border-bottom: 4px solid var(--red); }
-.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
-header .wrap { padding: 0; max-width: 1148px; }
-/* 좁은 화면: 순위표는 본문 위에 접힌 상태 / 넓은 화면: 왼쪽에 펼쳐 두고 스크롤을 따라다님 */
-.layout { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+  font: 14px/1.5 "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums; }
+body:has(dialog[open]) { overflow: hidden; }
+a { color: inherit; }
+
+/* 상단 바 48px: 마크·이름 / 시즌·검색 */
+.bar { background: var(--card); border-bottom: 1px solid var(--line); }
+.bar-in { max-width: 1360px; margin: 0 auto; padding: 8px 24px; min-height: 48px; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; text-decoration: none; }
+.brand svg { width: 24px; height: 24px; flex: none; }
+.bar-r { display: flex; align-items: center; gap: 8px; }
+.ctl { height: 32px; border: 1px solid var(--control); border-radius: var(--r-control); background: var(--card); color: var(--text);
+  font: inherit; font-size: 14px; }
+#seasonSel { padding: 0 6px 0 10px; cursor: pointer; }
+.search { position: relative; }
+#search { width: 240px; padding: 0 12px; }
+#search::placeholder { color: var(--muted); }
+#search:focus-visible, #seasonSel:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+#searchResults { position: absolute; right: 0; top: calc(100% + 6px); width: min(380px, 92vw); max-height: 60vh; overflow: auto;
+  z-index: 20; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-card);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .18); padding: 4px; } /* taste-skill-ignore: 떠 있는 검색 결과 */
+.sr { padding: 8px 10px; border-radius: var(--r-control); font-size: 13px; }
+.sr:hover { background: var(--hover); }
+.srn { font-weight: 600; text-decoration: none; }
+.srs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.srs a { font-size: 12px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--r-chip); color: var(--muted); text-decoration: none; }
+.srs a:hover { border-color: var(--control); color: var(--text); }
+@media (max-width: 600px) {
+  .bar-in { padding: 8px 16px; }
+  .bar-r { width: 100%; }
+  .search { flex: 1; }
+  #search { width: 100%; }
+  #searchResults { left: 0; width: 100%; }
+}
+
+/* 캔버스: 1312 = 순위표 272 + 간격 24 + 본문 1016 (1440px 화면, 좌우 여백 64) */
+.layout { max-width: 1360px; margin: 0 auto; padding: 28px 24px 64px; }
 main { min-width: 0; }
 @media (min-width: 1200px) {
-  .layout { max-width: 1460px; display: grid; grid-template-columns: 272px minmax(0, 1fr); gap: 20px; align-items: start; }
-  header .wrap { max-width: 1428px; }
+  .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); gap: 0 24px; align-items: start; }
+  .head { grid-column: 1 / -1; }
   #side { position: sticky; top: 16px; }
   #side summary { display: none; }
 }
-#side .card { padding: 12px 12px 10px; }
+@media (max-width: 600px) { .layout { padding: 20px 16px 48px; } }
+@media (max-width: 640px) {
+  .scroll > table > thead > tr > th:first-child, .scroll > table > tbody > tr:not(.box) > td:first-child {
+    position: sticky; left: 0; z-index: 1; background: var(--card); }
+  .scroll > table > thead > tr > th:first-child { z-index: 2; }
+}
+
+/* 제목 줄: 시즌 이름, 한 줄 요약(이번 시즌의 결론), 갱신 시각 */
+.head { margin-bottom: 16px; }
+.head h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; }
+.find { margin: 4px 0 0; font-size: 15px; color: var(--text2); }
+.nw { white-space: nowrap; }
+.meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+
+/* 시즌 성적: 칸을 나눈 한 줄. 첫 칸(정규시즌 성적)이 이 화면의 답이라 가장 크다 */
+.kpis { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin-top: 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+.kpi { padding: 14px 18px; min-width: 0; }
+.kpi + .kpi { border-left: 1px solid var(--rule); }
+.kpi.lead, .kpi.wide { grid-column: span 2; }
+.kl { font-size: 12px; color: var(--muted); }
+.kv { font-size: 20px; font-weight: 500; line-height: 1.35; margin-top: 2px; white-space: nowrap; }
+.kpi.lead .kv { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.ks { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.kv .strip { margin-top: 6px; flex-wrap: nowrap; }
+/* 태블릿: 네 칸. 첫 줄 성적(2)·순위·득실점, 둘째 줄 포스트시즌(2)·최근 경기(2) (포스트시즌이 없으면 최근 경기가 한 줄 전체) */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .kpis { grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .kpi.ps { order: 3; }
+  .kpi.recent { order: 4; }
+  .kpis:not(:has(.ps)) .kpi.recent { grid-column: 1 / -1; border-left: 0; }
+  .kpi.ps, .kpi.recent { border-top: 1px solid var(--rule); }
+  .kpi.ps { border-left: 0; }
+}
+/* 휴대폰: 성적·포스트시즌·최근 경기는 한 줄 전체, 순위와 득실점은 두 칸 */
+@media (max-width: 760px) {
+  .kpis { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+  .kpi { padding: 12px 16px; border-top: 1px solid var(--rule); }
+  .kpi + .kpi { border-left: 0; }
+  .kpi.lead, .kpi.wide { grid-column: 1 / -1; }
+  .kpi.lead { border-top: 0; }
+  .kpi.pair2 { border-left: 1px solid var(--rule); }
+  .kv { font-size: 18px; } .kpi.lead .kv { font-size: 24px; }
+}
+
+/* 승패 표시: 옅은 바탕에 같은 색의 진한 글자 */
+.strip { display: flex; gap: 3px; flex-wrap: wrap; }
+.strip span { width: 20px; height: 20px; border-radius: var(--r-chip); display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+.W { background: var(--win-bg); color: var(--win-ink); } .L { background: var(--loss-bg); color: var(--loss-ink); }
+.D { background: var(--draw-bg); color: var(--draw-ink); }
+.res { display: inline-block; min-width: 22px; padding: 0 3px; text-align: center; border-radius: var(--r-chip);
+  font-weight: 600; font-size: 12px; line-height: 20px; }
+
+/* 왼쪽 리그 순위표 */
+#side .card { padding: 14px 14px 10px; }
 #side summary { cursor: pointer; font-weight: 600; }
-.side-hd { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0; }
+.side-hd { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 6px; }
+.side-hd b { font-weight: 600; }
 .side-hd span { font-size: 12px; color: var(--muted); }
-table.stand th, table.stand td { padding: 5px 4px; font-size: 12.5px; }
-table.stand tr.me td { background: color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 700; }
-table.stand tr.cut td { border-bottom: 1.5px dashed var(--muted); }
-h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
-#seasonSel { font: inherit; color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .35);
-  border-radius: 8px; padding: 0 4px; cursor: pointer; }
-#seasonSel option { color: #1b1d29; background: #fff; }
-.hrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.search { position: relative; }
-#search { width: 220px; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .35);
-  background: rgba(255, 255, 255, .12); color: #fff; font: inherit; }
-#search::placeholder { color: #b9bbd6; }
-#search:focus { outline: none; background: rgba(255, 255, 255, .2); }
-#searchResults { position: absolute; right: 0; top: calc(100% + 6px); width: min(380px, 92vw); max-height: 60vh; overflow: auto;
-  z-index: 20; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .25); padding: 4px; }
-.sr { padding: 8px 10px; border-radius: 8px; font-size: 13px; }
-.sr:hover { background: var(--hover); }
-.srn { font-weight: 700; color: var(--accent); text-decoration: none; }
-.srs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.srs a { font-size: 11px; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); text-decoration: none; }
-.srs a:hover { border-color: var(--accent); color: var(--accent); }
-@media (max-width: 600px) { .search, #search { width: 100%; } #searchResults { left: 0; width: 100%; } }
-.sub { color: #b9bbd6; font-size: 13px; }
-.summary { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 18px; align-items: flex-end; }
-.stat .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.stat .k { font-size: 12px; color: #b9bbd6; }
-.strip { display: flex; gap: 3px; }
-.strip span { width: 22px; height: 22px; border-radius: 4px; display: grid; place-items: center;
-  font-size: 11px; font-weight: 700; color: #fff; }
-.W { background: var(--win); } .L { background: var(--loss); } .D { background: var(--draw); }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-.card h2 { margin: 0 0 12px; font-size: 16px; }
-.upcoming { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.up { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+table.stand th, table.stand td { padding: 6px 4px; font-size: 13px; }
+table.stand tr.me td { background: var(--active); font-weight: 600; }
+table.stand tr.cut td { border-bottom: 2px solid var(--control); }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: 20px; margin-bottom: 16px; }
+.card h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+
+/* 다음 경기 */
+.upcoming { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.up { border: 1px solid var(--line); border-radius: var(--r-card); padding: 12px 14px; }
 .up .d { color: var(--muted); font-size: 12px; }
 .up .o { font-weight: 600; margin-top: 2px; }
 .up.big { grid-column: 1 / -1; }
 .matchup { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin: 10px 0 8px;
-  padding: 10px 12px; background: var(--hover); border-radius: 8px; font-size: 13px; line-height: 1.7; }
+  padding: 12px 14px; background: var(--raised); border-radius: var(--r-control); font-size: 13px; line-height: 1.7; }
 .matchup .sp:last-child { text-align: right; }
-.vsx { font-weight: 800; color: var(--muted); }
+.vsx { font-weight: 600; color: var(--muted); }
 .pvrow { display: flex; gap: 12px; font-size: 13px; padding: 3px 0; flex-wrap: wrap; align-items: center; }
 .pvrow .k { color: var(--muted); min-width: 92px; }
 .pvrow .gap { display: inline-block; width: 10px; }
 .strip.sm { display: inline-flex; vertical-align: middle; }
 .strip.sm span { width: 18px; height: 18px; font-size: 10px; }
-.live { color: var(--red); font-weight: 700; }
-.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.tabs button { border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 6px 12px;
-  border-radius: 999px; cursor: pointer; font: inherit; }
-.tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-@media (prefers-color-scheme: dark) { .tabs button.on { color: #0f1020; } }
+.live { color: var(--loss); font-weight: 600; }
+
+/* 탭: 보기는 밑줄 탭, 경기 구분은 오른쪽 구간 선택 */
+.tabrow { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px 16px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--line); margin: -6px 0 16px; }
+.utabs { display: flex; gap: 22px; overflow-x: auto; scrollbar-width: none; }
+.utabs button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 0 9px;
+  font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.utabs button:hover { color: var(--text); }
+.utabs button.on { color: var(--text); font-weight: 600; border-bottom-color: var(--text); }
+.seg { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 7px; background: var(--active); border-radius: 8px; }
+.seg button { border: 0; background: none; font: inherit; font-size: 13px; padding: 3px 10px; border-radius: var(--r-control);
+  color: var(--muted); cursor: pointer; white-space: nowrap; }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: var(--card); color: var(--text); font-weight: 600; }
+.utabs button:focus-visible, .seg button:focus-visible, .more:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+/* 좁은 화면: 경기 구분을 탭 위로 올려, 선택한 탭의 밑줄이 구분선 위에 그대로 놓이게 한다 */
+@media (max-width: 760px) { .utabs { width: 100%; gap: 18px; } .seg { order: -1; margin: 0 0 6px; } }
+
+/* 표: 회색 머리글, 옅은 가로 줄, 숫자는 오른쪽 정렬 */
 .scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { font-size: 12px; color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+th, td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--card);
+  border-bottom-color: var(--line); }
 th.sort { cursor: pointer; user-select: none; }
 th.sort:hover { color: var(--text); }
 th.asc::after { content: " ▲"; } th.desc::after { content: " ▼"; }
 td.l, th.l { text-align: left; }
 tbody tr:hover { background: var(--hover); }
-.name { color: var(--accent); cursor: pointer; font-weight: 600; }
-.name:hover { text-decoration: underline; }
-.res { display: inline-block; width: 22px; text-align: center; border-radius: 4px; color: #fff; font-weight: 700; font-size: 12px; }
+.name { cursor: pointer; font-weight: 600; }
+.name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .muted { color: var(--muted); }
-.ha { display: inline-block; width: 2.9em; margin-right: 6px; border: 1px solid var(--accent); border-radius: 4px;
-  font-size: 11px; font-weight: 600; line-height: 17px; text-align: center; vertical-align: 1px; }
-.ha.H { background: var(--accent); color: #fff; }
-.ha.A { color: var(--accent); }
-@media (prefers-color-scheme: dark) { .ha.H { color: #0f1020; } }
-tr.muted .ha { opacity: .55; }
+.ha { display: inline-block; min-width: 2.7em; margin-right: 6px; border: 1px solid transparent; border-radius: var(--r-chip);
+  font-size: 11px; font-weight: 500; line-height: 17px; text-align: center; vertical-align: 1px; }
+.ha.H { background: var(--active); }
+.ha.A { border-color: var(--control); color: var(--muted); }
+tr.muted .ha { opacity: .6; }
 tr.game { cursor: pointer; }
-.more { display: block; margin: 14px auto 2px; padding: 8px 22px; border: 1px solid var(--line); border-radius: 999px;
-  background: var(--card); color: var(--text); font: inherit; cursor: pointer; }
+.more { display: block; margin: 16px auto 2px; height: 32px; padding: 0 18px; border: 1px solid var(--control); border-radius: var(--r-control);
+  background: var(--card); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
 .more:hover { background: var(--hover); }
-tr.box > td { padding: 0; background: var(--hover); }
+tr.box > td { padding: 0; background: var(--raised); }
 .boxin { padding: 12px; display: grid; gap: 12px; }
-.boxin table { background: var(--card); border-radius: 6px; }
+.boxin table { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-control); }
 .notes { font-size: 12px; color: var(--muted); line-height: 1.7; }
 .notes b { color: var(--text); font-weight: 600; }
 .pa { font-size: 12px; color: var(--muted); text-align: left; }
-.sec h3 { font-size: 14px; margin: 24px 0 4px; }
+.sec h3 { font-size: 15px; font-weight: 600; margin: 28px 0 4px; }
 .sec > h3:first-child { margin-top: 4px; }
 .note { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
-.note.warn { color: var(--loss); }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 0 28px; }
+.note.warn { color: var(--loss-ink); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 0 24px; }
 .grid2 > div { min-width: 0; }
 .pos { color: var(--win); font-weight: 600; } .neg { color: var(--loss); font-weight: 600; }
-.tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--muted); border-radius: 4px;
-  color: var(--muted); font-size: 11px; font-weight: 600; line-height: 16px; vertical-align: 1px; cursor: help; }
-.notice { border: 1px solid var(--line); background: var(--hover); border-radius: 8px; padding: 10px 12px; margin-bottom: 4px; }
+.tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--control); border-radius: var(--r-chip);
+  color: var(--muted); font-size: 11px; font-weight: 500; line-height: 16px; vertical-align: 1px; cursor: help; white-space: nowrap; }
+.notice { border: 1px solid var(--line); background: var(--raised); border-radius: var(--r-card); padding: 10px 12px; margin-bottom: 4px; }
 .notice .nt { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 .notice .nt .tag { margin: 0 4px 0 0; }
-table.career tr.total td { font-weight: 700; border-top: 2px solid var(--line); }
-table.career a { color: var(--accent); text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+table.career tr.total td { font-weight: 600; border-top: 1px solid var(--line); }
+table.career a { text-decoration: underline; text-decoration-color: var(--control); text-underline-offset: 3px; }
 table.career a:hover { text-decoration-color: currentColor; }
-dialog h4 { font-size: 13px; margin: 10px 0 4px; color: var(--muted); }
-.grp { font-size: 14px; margin: 18px 0 8px; }
-.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.pcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px; text-align: center; cursor: pointer; }
-.pcard:hover { border-color: var(--accent); background: var(--hover); }
-.pcard .nm { font-weight: 700; }
+dialog h4 { font-size: 13px; font-weight: 600; margin: 12px 0 4px; color: var(--muted); }
+
+/* 선수 탭 */
+.grp { font-size: 15px; font-weight: 600; margin: 24px 0 10px; }
+.grp .muted { font-weight: 400; font-size: 13px; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.pcard { border: 1px solid var(--line); border-radius: var(--r-card); padding: 14px 10px 12px; text-align: center; cursor: pointer; }
+.pcard:hover { border-color: var(--control); background: var(--hover); }
+.pcard .nm { font-weight: 600; }
 .pcard .ps { font-size: 12px; color: var(--muted); }
-.pcard .st { font-size: 12px; margin-top: 6px; }
-.pno { color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; }
+.pcard .st { font-size: 12px; margin-top: 6px; color: var(--text2); }
+.pno { font-weight: 700; font-variant-numeric: tabular-nums; }
 .ph { position: relative; width: 84px; height: 84px; margin: 0 auto 8px; border-radius: 50%; overflow: hidden;
-  background: var(--hover); display: grid; place-items: center; color: var(--muted); font-size: 28px; font-weight: 700; }
+  background: var(--active); display: grid; place-items: center; color: var(--muted); font-size: 28px; font-weight: 600; }
 .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; }
-/* 시즌 흐름 그래프: 선 2px, 막대 24px 이하·윗면만 둥글게, 격자는 실선 헤어라인, 끝점은 바탕색 고리 */
-.chart { position: relative; margin: 4px 0 6px; outline: none; }
-.chart:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
-.chart svg { display: block; overflow: visible; }
-.chart .grid { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
-.chart .base { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; }
-.chart .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.chart .lbl { fill: var(--text); font-size: 12px; font-weight: 700; }
-.chart .note { fill: var(--muted); font-size: 11px; }
-.chart .ln { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.chart .end { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
-.chart .band { fill: var(--accent); opacity: .06; }
-.chart .pos { fill: var(--win); opacity: .14; }
-.chart .neg { fill: var(--loss); opacity: .14; }
-.chart .xh { stroke: var(--muted); stroke-width: 1; }
-.chart .xdot { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
-.chart .b1 { fill: var(--s1); } .chart .b2 { fill: var(--s2); }
-.chart .hit { fill: transparent; } .chart .hit:hover, .chart .hit.on { fill: var(--hover); }
-.ctip { position: absolute; z-index: 5; pointer-events: none; background: var(--card); color: var(--text);
-  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; line-height: 1.6;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .15); white-space: nowrap; }
-.ctip .tt { color: var(--muted); }
-.ctip b { font-size: 13px; }
-.ctip .key { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; }
-.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 2px 0 4px; }
-.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-.sec a { color: var(--accent); text-decoration: none; }
-.sec a:hover { text-decoration: underline; }
-tr.champ td { background: color-mix(in srgb, #e0a800 14%, transparent); }
-tr.champ .post { color: #b07d00; font-weight: 700; }
-@media (prefers-color-scheme: dark) { tr.champ .post { color: #f0c040; } }
-.recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-.rec { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-.rec .rk { font-weight: 700; margin-bottom: 2px; }
-.rec ol { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.9; }
-.rec li b { float: right; font-variant-numeric: tabular-nums; }
-.leads { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-bottom: 4px; }
-.pcard.lead { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px 10px; }
+.leads { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; margin-bottom: 4px; }
+.pcard.lead { display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px 12px; }
 .lead .lk { font-size: 12px; color: var(--muted); }
 .lead .nm { font-size: 13px; }
-.lead .lv { font-size: 18px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.lead .lv { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.25; }
 .ph.sm { width: 48px; height: 48px; margin: 0; font-size: 18px; flex: none; }
-.ph.big { width: 112px; height: 112px; margin: 0; border-radius: 12px; font-size: 40px; flex: none; }
+.ph.big { width: 112px; height: 112px; margin: 0; border-radius: var(--r-card); font-size: 40px; flex: none; }
 .prof { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
 .prof .pt { font-size: 18px; margin-bottom: 6px; }
+.prof .pt b { font-weight: 600; }
 .prof dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; font-size: 13px; }
 .prof dt { color: var(--muted); }
 .prof dd { margin: 0; }
 .nrow { display: grid; grid-template-columns: 110px 1fr; font-size: 13px; line-height: 1.9; }
 .nrow > span:first-child { color: var(--muted); }
 .filters { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
-/* 창 자체는 스크롤하지 않고(.bd만 스크롤) 열려 있는 동안 뒤 페이지 스크롤도 잠가 스크롤바가 하나만 보이게 한다 */
+
+/* 시즌 흐름 그래프: 선 2px, 막대 24px 이하·윗면만 둥글게, 격자는 실선 헤어라인 */
+.chart { position: relative; margin: 4px 0 6px; outline: none; }
+.chart:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: var(--r-control); }
+.chart svg { display: block; overflow: visible; }
+.chart .grid { stroke: var(--rule); stroke-width: 1; shape-rendering: crispEdges; }
+.chart .base { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; }
+.chart .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .lbl { fill: var(--text); font-size: 12px; font-weight: 600; }
+.chart .note { fill: var(--muted); font-size: 11px; }
+.chart .ln { fill: none; stroke: var(--text); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .end { fill: var(--text); stroke: var(--card); stroke-width: 2; }
+.chart .band { fill: var(--text); opacity: .05; }
+.chart .pos { fill: var(--win); opacity: .16; }
+.chart .neg { fill: var(--loss); opacity: .16; }
+.chart .xh { stroke: var(--muted); stroke-width: 1; }
+.chart .xdot { fill: var(--text); stroke: var(--card); stroke-width: 2; }
+.chart .b1 { fill: var(--s1); } .chart .b2 { fill: var(--s2); }
+.chart .hit { fill: transparent; } .chart .hit:hover, .chart .hit.on { fill: var(--hover); }
+.ctip { position: absolute; z-index: 5; pointer-events: none; background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--r-control); padding: 6px 10px; font-size: 12px; line-height: 1.6;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .12); white-space: nowrap; } /* taste-skill-ignore: 떠 있는 툴팁 */
+.ctip .tt { color: var(--muted); }
+.ctip b { font-size: 13px; font-weight: 600; }
+.ctip .key { display: inline-block; width: 10px; height: 2px; margin-right: 6px; vertical-align: middle; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 2px 0 4px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.sec a { text-decoration: none; font-weight: 500; }
+.sec a:hover { text-decoration: underline; text-underline-offset: 3px; }
+tr.champ .post { color: var(--gold); font-weight: 600; }
+
+/* 역대·연속 기록 카드 */
+.recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.rec { border: 1px solid var(--line); border-radius: var(--r-card); padding: 12px 14px; }
+.rec .rk { font-weight: 600; margin-bottom: 4px; }
+.rec ol { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.9; }
+.rec li b { float: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* 선수 창: 떠 있는 창이라 그림자를 둔다 */
 dialog { border: none; border-radius: 12px; padding: 0; width: min(920px, 96vw); max-height: 88vh; overflow: hidden;
-  background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0, 0, 0, .3); } /* taste-skill-ignore: 대화창 */
 dialog[open] { display: flex; flex-direction: column; }
-dialog::backdrop { background: rgba(10, 10, 30, .55); }
-dialog .hd { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px;
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog .hd { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;
   border-bottom: 1px solid var(--line); flex: none; }
-dialog .bd { padding: 12px 16px 16px; overflow: auto; flex: 1; min-height: 0; }
-html { scrollbar-gutter: stable; }
-body:has(dialog[open]) { overflow: hidden; }
-dialog button.x { border: none; background: none; color: var(--muted); font-size: 22px; cursor: pointer; }
+dialog .hd strong { font-weight: 600; }
+dialog .bd { padding: 16px; overflow: auto; flex: 1; min-height: 0; outline: none; }
+dialog button.x { border: none; background: none; color: var(--muted); font-size: 22px; line-height: 1; width: 32px; height: 32px;
+  border-radius: var(--r-control); cursor: pointer; }
+dialog button.x:hover { background: var(--hover); color: var(--text); }
 .empty { color: var(--muted); padding: 20px 0; text-align: center; }
-footer { color: var(--muted); font-size: 12px; text-align: center; padding: 20px; }
+footer { color: var(--muted); font-size: 12px; text-align: center; padding: 8px 20px 28px; }
 </style>
 </head>
 <body>
-<header><div class="wrap" id="hdr"></div></header>
+<header class="bar"><div class="bar-in">
+  <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#131230"/><circle cx="16" cy="16" r="11" fill="#fff"/><path d="M9.6 8.4C13.2 12.6 13.2 19.4 9.6 23.6M22.4 8.4C18.8 12.6 18.8 19.4 22.4 23.6" fill="none" stroke="#d4202c" stroke-width="2.2" stroke-linecap="round"/></svg><span>두산 베어스 기록</span></a>
+  <div class="bar-r" id="barR"></div>
+</div></header>
 <div class="layout">
+  <section class="head" id="hdr"></section>
   <aside id="side" hidden></aside>
   <main>
     <section class="card" id="upcomingCard" hidden><h2>다음 경기</h2><div class="upcoming" id="upcoming"></div></section>
     <section class="card">
-      <div class="tabs" id="stageTabs"></div>
-      <div class="tabs" id="viewTabs"></div>
+      <div class="tabrow"><nav class="utabs" id="viewTabs" aria-label="보기"></nav><div class="seg" id="stageTabs" role="group" aria-label="경기 구분"></div></div>
       <div id="view"></div>
     </section>
   </main>
 </div>
 <footer id="foot"></footer>
-<dialog id="dlg"><div class="hd"><strong id="dlgTitle"></strong><button class="x" onclick="dlg.close()">×</button></div><div class="bd" id="dlgBody"></div></dialog>
+<dialog id="dlg"><div class="hd"><strong id="dlgTitle"></strong><button class="x" onclick="dlg.close()">×</button></div><div class="bd" id="dlgBody" tabindex="-1" autofocus></div></dialog>
 
 <script>
 const DATA = /*__DATA__*/null;
@@ -262,22 +363,25 @@ function header() {
   }
   const done = DATA.regularDone;  // 정규시즌 종료 (포스트시즌이 남아 있어도 순위·연속 기록은 '최종')
   const latest = DATA.seasons[0];
-  const seasonPicker = DATA.seasons.length > 1
-    ? `<select id="seasonSel" aria-label="시즌 선택">${DATA.seasons.map((s) => `<option value="${s}" ${s === DATA.season ? "selected" : ""}>${s}</option>`).join("")}</select>`
-    : DATA.season;
+  // 상단 바 오른쪽: 시즌 선택(범위)과 선수 검색
+  $("#barR").innerHTML = `
+    ${DATA.seasons.length > 1 ? `<select id="seasonSel" class="ctl" aria-label="시즌 선택">${DATA.seasons.map((s) => `<option value="${s}" ${s === DATA.season ? "selected" : ""}>${s} 시즌</option>`).join("")}</select>` : ""}
+    <div class="search"><input id="search" class="ctl" type="search" placeholder="선수 검색 (${DATA.seasons.at(-1)}~)" autocomplete="off" aria-label="선수 검색">
+    <div id="searchResults" hidden></div></div>`;
+  // 성적 줄: 정규시즌 성적이 이 화면의 답이라 가장 크게, 나머지는 같은 크기
+  const kpi = (label, value, sub, cls = "") => `<div class="kpi ${cls}"><div class="kl">${label}</div><div class="kv">${value}</div>${sub ? `<div class="ks">${sub}</div>` : ""}</div>`;
+  const rw = recent.filter((g) => g.result === "W").length, rl = recent.filter((g) => g.result === "L").length;
+  const strip = `<div class="strip" role="img" aria-label="${recent.map((g) => RES[g.result]).join(" ")}">${recent.map((g) => `<span class="${g.result}" title="${fmtDate(g.date)} ${esc(vs(g))} ${g.ts}-${g.os}">${RES[g.result]}</span>`).join("")}</div>`;
   $("#hdr").innerHTML = `
-    <div class="hrow"><h1>${esc(DATA.team)} ${seasonPicker} 시즌 기록</h1>
-      <div class="search"><input id="search" type="search" placeholder="선수 검색 (${DATA.seasons.at(-1)}~)" autocomplete="off" aria-label="선수 검색">
-      <div id="searchResults" hidden></div></div></div>
-    <div class="sub">마지막 동기화 ${esc((DATA.lastSync || "").replace("T", " "))} · 리포트 생성 ${esc(DATA.generatedAt)}</div>
-    <div class="summary">
-      ${r ? `<div class="stat"><div class="v">${r.w}승 ${r.l}패 ${r.d}무</div><div class="k">정규시즌 (${r.g}경기)</div></div>
-             <div class="stat"><div class="v">${rate(r.pct)}</div><div class="k">승률</div></div>` : ""}
-      ${st && st.rank ? `<div class="stat"><div class="v">${st.rank}위</div><div class="k">${done ? "최종 순위" : `순위 (${fmtDate(st.game_date)} 기준)`}</div></div>` : ""}
+    <h1>${DATA.season} 시즌</h1>
+    <p class="find">${finding(st, recent)}</p>
+    <p class="meta">경기가 끝날 때마다 자동으로 기록 · 마지막 확인 ${esc((DATA.lastSync || "").replace("T", " ").slice(0, 16))}</p>
+    <div class="kpis">
+      ${r ? kpi(`정규시즌 ${r.g}경기`, `${r.w}승 ${r.l}패 ${r.d}무`, `승률 ${rate(r.pct)}`, "lead") : ""}
       ${postseason()}
-      ${r ? `<div class="stat"><div class="v">${r.rs} / ${r.ra}</div><div class="k">득점 / 실점</div></div>` : ""}
-      ${streak ? `<div class="stat"><div class="v">${streak}</div><div class="k">${done ? "시즌 마지막 연속" : "현재 연속"}</div></div>` : ""}
-      ${recent.length ? `<div class="stat"><div class="strip">${recent.map((g) => `<span class="${g.result}" title="${fmtDate(g.date)} ${esc(vs(g))} ${g.ts}-${g.os}">${RES[g.result]}</span>`).join("")}</div><div class="k">${done ? "시즌 마지막" : "최근"} ${recent.length}경기</div></div>` : ""}
+      ${st && st.rank ? kpi("순위", `${st.rank}위`, done ? "정규시즌 최종" : `${fmtDate(st.game_date)} 기준`) : ""}
+      ${r ? kpi("득점 / 실점", `${r.rs} / ${r.ra}`, `득실 ${signed(r.rs - r.ra)}`, "pair2") : ""}
+      ${recent.length ? kpi(`${done ? "시즌 마지막" : "최근"} ${recent.length}경기`, strip, `${rw}승 ${rl}패${streak ? ` · ${streak}${done ? "로 마감" : " 중"}` : ""}`, "wide recent") : ""}
     </div>`;
   const sel = $("#seasonSel");
   if (sel) sel.onchange = () => { location.href = +sel.value === latest ? "index.html" : `${sel.value}.html`; };
@@ -320,12 +424,33 @@ function setupSearch() {
 }
 
 // 포스트시즌 성적: 결과 문구(우승·탈락·진출·진행 중)는 시리즈 전적으로 판단한 DATA.post
+const postLabel = () => DATA.post === "우승" || DATA.post === "준우승" ? `한국시리즈 ${DATA.post}` : DATA.post;
 function postseason() {
   const ps = finals.filter((g) => g.stage === "postseason");
   if (!ps.length || !DATA.post) return "";
   const w = ps.filter((g) => g.result === "W").length, l = ps.filter((g) => g.result === "L").length;
-  const label = DATA.post === "우승" || DATA.post === "준우승" ? `한국시리즈 ${DATA.post}` : DATA.post;
-  return `<div class="stat"><div class="v">${esc(label)}</div><div class="k">포스트시즌 ${w}승 ${l}패</div></div>`;
+  return `<div class="kpi wide ps"><div class="kl">포스트시즌</div><div class="kv">${esc(postLabel())}</div><div class="ks">${w}승 ${l}패</div></div>`;
+}
+
+// 제목 아래 한 줄: 이번 시즌의 결론(진행 중이면 지금 상황)과 다음 경기 (HTML, 각 조각은 줄바꿈 없이 이어 둔다)
+function finding(st, recent) {
+  const parts = [];
+  const ps = finals.filter((g) => g.stage === "postseason");
+  if (st && st.rank) parts.push(DATA.regularDone ? `정규시즌 ${st.rank}위로 마감` : `현재 ${st.rank}위`);
+  if (ps.length && DATA.post) {
+    const g = ps[ps.length - 1];
+    const md = `${+g.date.slice(5, 7)}/${+g.date.slice(8, 10)}`;
+    parts.push(`${esc(postLabel())} <span class="nw">(${md} ${esc(g.opp)}전 ${g.ts}:${g.os} ${RES[g.result]})</span>`);  // 괄호 안에서 줄이 끊기지 않게
+  } else if (DATA.regularDone && st && st.rank > (DATA.season <= 2014 ? 4 : 5)) {
+    parts.push("포스트시즌 진출 실패");
+  } else if (!DATA.regularDone && recent.length) {
+    parts.push(`최근 ${recent.length}경기 ${recent.filter((g) => g.result === "W").length}승 ${recent.filter((g) => g.result === "L").length}패`);
+  }
+  const n = new Date(), today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  const next = DATA.games.find((g) => (g.status === "SCHEDULED" || g.status === "LIVE") && g.date >= today
+    && !(g.stage === "postseason" && series(g.round).decided));
+  if (next) parts.push(`다음 경기 ${fmtDate(next.date)} ${esc(next.opp)}전`);
+  return parts.map((t) => `<span class="nw">${t}</span>`).join(" · ");
 }
 
 // 포스트시즌 시리즈 전적 (두산 기준). 와일드카드는 정규시즌 4위 팀이 1승을 안고 시작한다 (2015년~)
@@ -385,7 +510,7 @@ function previewCard(g, pv, round) {
   </div>`;
 }
 
-// 왼쪽 리그 순위표. 점선 위가 포스트시즌 진출권 (2014년까지 상위 4팀, 2015년부터 5팀)
+// 왼쪽 리그 순위표. 굵은 선 위가 포스트시즌 진출권 (2014년까지 상위 4팀, 2015년부터 5팀)
 function standings() {
   const L = DATA.league;
   if (!L || !L.teams.length) return;
@@ -401,7 +526,7 @@ function standings() {
     <summary>KBO 순위${me ? ` · 두산 ${me.rank}위` : ""} <span class="muted">${when}</span></summary>
     <div class="side-hd"><b>${DATA.season} KBO 순위</b><span>${when}</span></div>
     <table class="stand"><thead><tr><th></th><th class="l">팀</th><th>승</th><th>패</th><th>무</th><th>승률</th><th>차</th></tr></thead><tbody>${rows}</tbody></table>
-    <p class="note" style="margin: 8px 0 0">점선 위 ${cut}팀: 포스트시즌 진출${DATA.regularDone ? "" : "권"}</p></details>`;
+    <p class="note" style="margin: 8px 0 0">굵은 선 위 ${cut}팀: 포스트시즌 진출${DATA.regularDone ? "" : "권"}</p></details>`;
   const box = $("#standBox"), wide = matchMedia("(min-width: 1200px)");
   box.open = wide.matches;
   wide.addEventListener("change", (e) => { if (e.matches) box.open = true; });
@@ -532,7 +657,7 @@ function teamView() {
   const t = DATA.stages[stage] && DATA.stages[stage].team;
   if (!t) return `<div class="empty">기록 없음</div>`;
   const dash = (v) => v == null ? "-" : v;
-  const pct = (v) => v == null ? "-" : `<span class="${v > .5 ? "pos" : v < .5 ? "neg" : ""}">${rate(v)}</span>`;
+  const pct = (v) => rate(v);  // 승률은 먹색, 색은 득실 차이(diff)에만
   const diff = (n) => `<span class="${n > 0 ? "pos" : n < 0 ? "neg" : ""}">${n > 0 ? "+" : ""}${n}</span>`;
   const table = (head, rows) => `<div class="scroll"><table><thead><tr>${head.map((h, i) => `<th class="${i === 0 ? "l" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${rows.map((cells) => `<tr>${cells.map((c, i) => `<td class="${i === 0 ? "l" : ""}">${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   const rec = (r) => [r.g, r.w, r.l, r.d, pct(r.pct), r.rs, r.ra, diff(r.rs - r.ra)];
@@ -891,7 +1016,7 @@ function historyView() {
     <td class="l"><a href="${seasonHref(r.season)}">${r.season}</a>${r.season === DATA.season ? ' <span class="muted">(현재 페이지)</span>' : ""}</td>
     <td>${r.rank ? `${r.rank}위` : "-"}</td><td>${r.g}</td><td>${r.w}</td><td>${r.l}</td><td>${r.d}</td><td>${rate(r.pct)}</td>
     <td>${r.rs}</td><td>${r.ra}</td><td>${diff(r.rs - r.ra)}</td><td class="l post">${r.post ? esc(r.post) : '<span class="muted">-</span>'}</td></tr>`).join("");
-  const fmt = (f, v) => f === "avg" ? rate(v) : f === "era" ? rate(v, 2) : v;
+  const fmt = (f, v) => f === "avg" ? rate(v) : f === "era" ? rate(v, 2) : f === "ip" ? `${Math.floor(v / 3)}${["", " ⅓", " ⅔"][v % 3]}` : v;
   const cards = H.records.map((c) => `<div class="rec"><div class="rk">${esc(c.label)}</div><ol>${c.rows.map((r) =>
     `<li><a href="${seasonHref(r.season)}#p=${r.pid}">${esc(r.name)}</a> <span class="muted">${r.season}</span><b>${fmt(c.fmt, r.value)}</b></li>`).join("")}</ol></div>`).join("");
   return `<div class="sec">

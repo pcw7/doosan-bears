@@ -426,6 +426,7 @@ def season_records(conn, seasons: list[int], top_n: int = 5) -> list[dict]:
         {"label": "홀드", **top(pit, "hld", "n")},
         {"label": "탈삼진", **top(pit, "so", "n")},
         {"label": "ERA", **top(pit, "era", "era", highest=False, qualified=True)},
+        {"label": "이닝", **top(pit, "outs", "ip")},
     ]
 
 
@@ -488,11 +489,11 @@ def _top(rows: list[dict], n: int) -> list[dict]:
 
 
 def season_streaks(conn, season: int) -> dict:
-    """시즌 흐름 탭: 그 시즌 최다 연승·연패(3개), 연속 경기 안타·출루(5명), 지금 이어지고 있는 선수 기록."""
+    """시즌 흐름 탭: 그 시즌 최다 연승·연패(5개), 연속 경기 안타·출루(5명), 지금 이어지고 있는 선수 기록."""
     team_runs, ps = team_streaks(conn, season), player_streaks(conn, season)
     return {
-        "team_w": _top([r for r in team_runs if r["type"] == "W"], 3),
-        "team_l": _top([r for r in team_runs if r["type"] == "L"], 3),
+        "team_w": _top([r for r in team_runs if r["type"] == "W"], 5),
+        "team_l": _top([r for r in team_runs if r["type"] == "L"], 5),
         "hit": _top(ps["hit"], 5), "onbase": _top(ps["onbase"], 5),
         "active": {k: _top([r for r in ps[k] if r["active"]], 10) for k in ("hit", "onbase")},
     }
