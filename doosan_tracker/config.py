@@ -41,3 +41,8 @@ LOOKBACK_DAYS = 7
 LOOKAHEAD_DAYS = 14
 # 박스스코어 요청 사이 대기 (초) — API 서버에 부담을 주지 않기 위해
 REQUEST_DELAY = 0.4
+
+# 배포된 사이트 (네이버에 닿지 않을 때 마지막 성공 시각을 여기서 읽는다)
+SITE_URL = "https://pcw7.github.io/doosan-bears/"
+# 네이버 접속이 이 시간 넘게 실패하면 하루 한 번(17시 첫 실행) 실행을 실패로 표시해 알림 메일을 받는다
+STALE_HOURS = 24

@@ -7,11 +7,14 @@
 """
 import argparse
 import logging
+import os
+import re
 import sys
-from datetime import date
+import urllib.request
+from datetime import date, datetime, timedelta
 
-from . import db, export, league, players, preview, report
-from .config import CSV_DIR, DB_PATH, LOG_PATH, SITE_DIR
+from . import db, export, league, naver, players, preview, report
+from .config import CSV_DIR, DB_PATH, LOG_PATH, SITE_DIR, SITE_URL, STALE_HOURS
 from .sync import restore, sync
 
 
@@ -34,6 +37,34 @@ def publish(conn) -> None:
     files = export.export_csv(conn, CSV_DIR, seasons)
     logging.info("CSV %d개 → %s", len(files), CSV_DIR)
     logging.info("리포트 %d개 시즌 (%d~%d) → %s", len(seasons), seasons[-1], seasons[0], SITE_DIR)
+
+
+def live_last_sync() -> datetime | None:
+    """배포된 사이트에 실린 마지막 수집 성공 시각 (읽지 못하면 None)."""
+    try:
+        with urllib.request.urlopen(SITE_URL, timeout=20) as resp:
+            m = re.search(r'"lastSync":"([^"]+)"', resp.read().decode("utf-8"))
+        return datetime.fromisoformat(m.group(1)) if m else None
+    except Exception:
+        logging.warning("배포된 사이트에서 마지막 수집 시각을 읽지 못했습니다")
+        return None
+
+
+def naver_down(err: Exception) -> int:
+    """네이버 일정 API에 닿지 않을 때(시간 초과·차단). 2026-10-26 GitHub 서버에서만 네이버 응답이 끊긴 적이 있어,
+    실행마다 실패 메일이 가지 않도록 이번 실행은 건너뛰고(수집·커밋·배포 없음) 사이트는 지난 배포를 그대로 둔다.
+    마지막 성공이 STALE_HOURS를 넘었으면 하루 한 번(17시 첫 실행)만 실패로 표시해 알린다."""
+    logging.warning("네이버 응답 없음 — 이번 실행은 수집·배포를 건너뜁니다: %s", err)
+    if os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+            f.write("skip=true\n")
+        print("::warning::네이버 응답 없음 — 이번 실행은 수집·배포를 건너뜀 (사이트는 지난 배포 그대로)")
+    last, now = live_last_sync(), datetime.now()
+    if last and now - last > timedelta(hours=STALE_HOURS):
+        logging.error("네이버에 %s 이후로 %d시간 넘게 접속하지 못했습니다", last.strftime("%Y-%m-%d %H:%M"), STALE_HOURS)
+        if now.hour == 17 and now.minute < 20:  # 알림 메일은 하루 한 번
+            return 1
+    return 0
 
 
 def update_info(conn, all_seasons: bool) -> None:
@@ -81,7 +112,10 @@ def main(argv=None) -> int:
     conn = db.connect(DB_PATH)
     try:
         if args.cmd == "sync":
-            stats = sync(conn, args.start, args.end, args.force)
+            try:
+                stats = sync(conn, args.start, args.end, args.force)
+            except naver.ApiError as e:  # 일정 조회부터 실패 = 네이버에 닿지 않음 (경기별 실패는 sync 안에서 셈)
+                return naver_down(e)
             update_info(conn, all_seasons=False)
             try:
                 preview.update(conn)

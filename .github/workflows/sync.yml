@@ -24,6 +24,8 @@ jobs:
   collect:
     runs-on: ubuntu-24.04   # ubuntu-latest는 2026-10-19부터 26.04로 바뀌므로 고정
     timeout-minutes: 20
+    outputs:
+      skip: ${{ steps.sync.outputs.skip }}
     concurrency:            # 수집은 겹치지 않게 하나씩 (커밋 충돌 방지)
       group: collect
       cancel-in-progress: false
@@ -44,14 +46,17 @@ jobs:
           key: db-${{ hashFiles('doosan_tracker/**') }}-${{ hashFiles('data/games/**') }}
           restore-keys: db-${{ hashFiles('doosan_tracker/**') }}-
 
-      # 일부 경기 수집에 실패해도(종료 코드 1) 받은 경기는 커밋·배포하고, 실행 결과는 실패로 표시해 알림을 받는다
+      # 일부 경기 수집에 실패해도(종료 코드 1) 받은 경기는 커밋·배포하고, 실행 결과는 실패로 표시해 알림을 받는다.
+      # 네이버에 아예 닿지 않으면(2026-10-26 GitHub 서버에서만 시간 초과) skip=true를 남기고 아래 단계를 모두 건너뛴다:
+      # 사이트는 지난 배포 그대로, 실패 메일은 마지막 성공이 24시간을 넘었을 때 하루 한 번만.
       - name: 경기 기록 수집 + 리포트 생성
+        id: sync
         run: python -m doosan_tracker sync
         env:
           DOOSAN_ARCHIVE_KEY: ${{ secrets.DOOSAN_ARCHIVE_KEY }}   # 원본 암호 키 (저장소 Settings → Secrets)
 
       - name: 새 경기 원본·선수 정보·순위표 커밋
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.sync.outputs.skip != 'true' }}
         run: |
           git add data/games data/players data/standings
           if git diff --cached --quiet; then
@@ -68,16 +73,17 @@ jobs:
           fi
 
       # 배포 작업이 받아 갈 웹사이트 파일
-      - if: ${{ !cancelled() }}
+      - if: ${{ !cancelled() && steps.sync.outputs.skip != 'true' }}
         uses: actions/configure-pages@v6
-      - if: ${{ !cancelled() }}
+      - if: ${{ !cancelled() && steps.sync.outputs.skip != 'true' }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: reports
 
   deploy:
     needs: collect
-    if: ${{ !cancelled() }}   # 수집이 일부 실패해도(종료 코드 1) 만들어진 사이트는 배포
+    # 수집이 일부 실패해도(종료 코드 1) 만들어진 사이트는 배포, 네이버에 닿지 않아 건너뛴 실행은 배포하지 않음
+    if: ${{ !cancelled() && needs.collect.outputs.skip != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:            # 배포는 항상 최신 사이트 전체를 올리므로, 멈춘 이전 배포는 새 배포가 취소하고 대신한다
